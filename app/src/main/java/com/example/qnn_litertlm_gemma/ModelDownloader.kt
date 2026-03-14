@@ -47,6 +47,9 @@ class ModelDownloader(private val context: Context) {
             )
         )
     }
+
+
+
     
     fun saveToken(token: String) {
         prefs.edit().putString(KEY_HF_TOKEN, token).apply()

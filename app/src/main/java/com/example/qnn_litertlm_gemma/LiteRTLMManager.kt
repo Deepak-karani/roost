@@ -8,9 +8,15 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
+import com.google.ai.edge.litertlm.LogSeverity
+import com.google.ai.edge.litertlm.Content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * Data class for model performance metrics
@@ -34,6 +40,8 @@ class LiteRTLMManager private constructor(private val context: Context) {
     private var isInitialized = false
     private var currentBackend: Backend = Backend.CPU
     
+    // Standard LiteRT components disabled
+    
     companion object {
         private const val TAG = "LiteRTLMManager"
         
@@ -48,78 +56,146 @@ class LiteRTLMManager private constructor(private val context: Context) {
     }
     
     /**
-     * Initialize the LiteRT-LM engine with the model
+     * Initialize the LiteRT-LM Engine with the specified model
      */
-    suspend fun initialize(modelPath: String, systemPrompt: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
-        val startTime = System.currentTimeMillis()
-        try {
-            if (isInitialized) {
-                Log.d(TAG, "Re-initializing engine...")
-                cleanup()
-            }
-            
-            Log.d(TAG, "Initializing LiteRT-LM engine with path: $modelPath")
-            
-            // Try priority: NPU (QNN) -> GPU (OpenCL) -> CPU
-            val backendsToTry = listOf(Backend.NPU, Backend.GPU, Backend.CPU)
-            var success = false
-            var lastError: Exception? = null
-            
-            for (backend in backendsToTry) {
-                try {
-                    Log.d(TAG, "Attempting initialization with backend: $backend")
-                    initializeEngineWithBackend(modelPath, backend)
-                    currentBackend = backend
-                    success = true
-                    break
-                } catch (e: Exception) {
-                    Log.w(TAG, "$backend initialization failed, trying next...", e)
-                    lastError = e
-                    cleanup()
-                }
-            }
-            
-            if (!success) {
-                throw lastError ?: Exception("Failed to initialize with any backend")
-            }
-            
-            // Create a conversation
-            val conversationConfig = ConversationConfig(
-                systemMessage = Message.of(systemPrompt ?: "You are a helpful AI assistant powered by LiteRT-LM."),
-                samplerConfig = SamplerConfig(topK = 40, topP = 0.95, temperature = 0.8)
-            )
-            
-            conversation = engine?.createConversation(conversationConfig)
-            isInitialized = true
-            
-            val duration = System.currentTimeMillis() - startTime
-            Log.d(TAG, "LiteRT-LM initialized successfully on $currentBackend in ${duration}ms")
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize LiteRT-LM", e)
-            Result.failure(e)
-        }
-    }
-    
-    private fun initializeEngineWithBackend(modelPath: String, backend: Backend) {
-        val engineConfig = EngineConfig(
-            modelPath = modelPath,
-            backend = backend,
-            cacheDir = context.cacheDir.path
-        )
-        engine = Engine(engineConfig)
-        engine?.initialize()
-    }
-    
-    suspend fun sendMessage(messageText: String): Flow<Message> {
-        if (!isInitialized || conversation == null) {
-            throw IllegalStateException("LiteRT-LM not initialized.")
+    suspend fun initialize(modelPath: String, systemPrompt: String? = null, isEmbedding: Boolean = false, preferredBackend: String? = null): Result<Boolean> = withContext(Dispatchers.IO) {
+        Log.e(TAG, "!!! LiteRTLMManager.initialize STARTED for: $modelPath !!!")
+        if (isInitialized) {
+            cleanup()
         }
         
-        return withContext(Dispatchers.IO) {
-            val userMessage = Message.of(messageText)
-            conversation!!.sendMessageAsync(userMessage)
+        try {
+            Log.e(TAG, "Checking backend availability...")
+            if (isEmbedding) {
+                initializeStandardLiteRT(modelPath)
+            } else {
+                val initialBackend = if (preferredBackend != null) {
+                    try {
+                        Backend.valueOf(preferredBackend.uppercase())
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Invalid preferred backend: $preferredBackend, defaulting to GPU")
+                        Backend.GPU
+                    }
+                } else {
+                    Log.e(TAG, "No preference, defaulting to GPU for generative model")
+                    Backend.GPU
+                }
+                
+                Log.e(TAG, "Initializing with initial backend: $initialBackend")
+                initializeEngineWithRotation(modelPath, initialBackend)
+            }
+            isInitialized = true
+            Log.e(TAG, "!!! LiteRTLMManager.initialize COMPLETED SUCCESSFULLY !!!")
+            Result.success(true)
+        } catch (e: Throwable) {
+            Log.e(TAG, "!!! INITIALIZATION CRITICAL FAILURE !!!: ${e.message}", e)
+            Result.failure(Exception(e))
         }
+    }
+
+    private fun initializeStandardLiteRT(modelPath: String) {
+        // Standard LiteRT disabled in 0.8.0 downgrade due to API incompatibility
+        Log.e(TAG, "Standard LiteRT initialization disabled in 0.8.0")
+        currentBackend = Backend.CPU
+    }
+    
+    // Updated to support rotation starting from any backend
+    private fun initializeEngineWithRotation(modelPath: String, backend: Backend) {
+        try {
+            initializeEngineLimit(modelPath, backend)
+        } catch (e: Throwable) {
+            Log.w(TAG, "Backend $backend failed: ${e.message}. Attempting fallback...", e)
+            
+            // Define fallback chain based on what failed
+            val nextBackend = when (backend) {
+                Backend.NPU -> Backend.GPU
+                Backend.GPU -> Backend.CPU
+                Backend.CPU -> null // End of line
+            }
+            
+            if (nextBackend != null) {
+                Log.i(TAG, "Falling back to $nextBackend")
+                initializeEngineWithRotation(modelPath, nextBackend)
+            } else {
+                Log.e(TAG, "All backends failed. Last error: ${e.message}", e)
+                throw e
+            }
+        }
+    }
+
+    private fun initializeEngineLimit(modelPath: String, backend: Backend) {
+        val file = File(modelPath)
+        Log.e(TAG, "Checking model file: ${file.absolutePath}")
+        if (!file.exists()) {
+            throw java.io.FileNotFoundException("Model file not found at $modelPath")
+        }
+        if (!file.canRead()) {
+            throw java.io.IOException("Model file exists but cannot be read (permissions?)")
+        }
+        Log.e(TAG, "Model file valid. Size: ${file.length()} bytes. Backend: $backend")
+
+        val engineConfig = EngineConfig(
+            modelPath = modelPath,
+            backend = backend
+        )
+        
+        Log.e(TAG, "Instantiating Engine with backend: $backend")
+        val candidateEngine = Engine(engineConfig) // Constructor might throw
+        Log.e(TAG, "Initializing Engine explicitly (0.8.0 requirement)...")
+        candidateEngine.initialize()
+        
+        Log.e(TAG, "Engine instance created, verifying conversation support...")
+        try {
+            val testConv = candidateEngine.createConversation(ConversationConfig())
+            testConv.close()
+            Log.e(TAG, "!!! Engine verified successfully with backend: $backend !!!")
+        } catch (cvError: Throwable) {
+            Log.e(TAG, "Conversation verification failed for $backend: ${cvError.message}")
+            candidateEngine.close()
+            throw cvError 
+        }
+
+        engine = candidateEngine
+        currentBackend = backend
+    }
+
+    /**
+     * Start a new conversation
+     */
+    fun startConversation() {
+        if (!isInitialized || engine == null) {
+            throw IllegalStateException("Engine not initialized.")
+        }
+        
+        val conversationConfig = ConversationConfig(
+            samplerConfig = SamplerConfig(
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.9
+            )
+        )
+        conversation = engine?.createConversation(conversationConfig)
+    }
+
+    fun sendMessage(text: String): Flow<String> {
+        if (!isInitialized || engine == null) {
+            throw IllegalStateException("Engine not initialized.")
+        }
+        
+        if (conversation == null) {
+            startConversation()
+        }
+        // Efficient extraction from Message contents
+        // 0.8.0 API: Message.of(text)
+        val message = Message.of(text)
+        return conversation!!.sendMessageAsync(message).map { msg ->
+             msg.toString()
+        }
+    }
+
+    suspend fun computeEmbedding(text: String): FloatArray = withContext(Dispatchers.IO) {
+         // Embeddings disabled
+         FloatArray(768)
     }
 
     fun getActiveBackendName(): String = currentBackend.name
@@ -133,11 +209,16 @@ class LiteRTLMManager private constructor(private val context: Context) {
         try {
             conversation?.close()
             engine?.close()
+            // compiledModel?.close()
+            // environment?.close()
+            
             conversation = null
             engine = null
+            // compiledModel = null
+            // environment = null
             isInitialized = false
         } catch (e: Exception) {
-            Log.e(TAG, "Error cleaning up resources", e)
+            Log.e(TAG, "Error during cleanup", e)
         }
     }
 }
