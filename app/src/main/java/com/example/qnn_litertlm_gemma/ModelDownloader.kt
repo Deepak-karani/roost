@@ -27,10 +27,23 @@ class ModelDownloader(private val context: Context) {
             ModelConfig(
                 id = "gemma-3n",
                 name = "Gemma 3n (Int4)",
-                filename = "gemma-3n-E2B-it-int4.litertlm",
-                url = "https://huggingface.co/google/gemma-3n-it-int4/resolve/main/gemma-3n-it-int4.litertlm",
-                systemPrompt = null, // Testing if prompt causes init failure
-                preferredBackend = "NPU"
+                filename = "gemma3n.litertlm",
+                url = "https://huggingface.co/google/gemma-3n-E2B-it-litert-lm/resolve/main/gemma-3n-E2B-it-int4.litertlm",
+                systemPrompt = "You are Gemma, a helpful AI assistant powered by Google's LiteRT-LM running on device."
+            ),
+            ModelConfig(
+                id = "qwen3-0.6b",
+                name = "Qwen 3 0.6B (Int4)",
+                filename = "qwen3-0.6b.litertlm",
+                url = "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/qwen3-0.6b-int4.litertlm",
+                systemPrompt = "You are Qwen, a helpful AI assistant running on device."
+            ),
+            ModelConfig(
+                id = "gemma3-1b",
+                name = "Gemma 3 1B (Int4)",
+                filename = "gemma3-1b-it-int4.litertlm",
+                url = "https://huggingface.co/litert-community/Gemma3-1B-IT/blob/main/gemma3-1b-it-int4.litertlm",
+                systemPrompt = "You are Gemma, a helpful AI assistant running on device."
             )
         )
     }
