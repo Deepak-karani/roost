@@ -42,14 +42,14 @@ class ModelDownloader(private val context: Context) {
                 id = "gemma3-1b",
                 name = "Gemma 3 1B (Int4)",
                 filename = "gemma3-1b-it-int4.litertlm",
-                url = "https://huggingface.co/litert-community/Gemma3-1B-IT/blob/main/gemma3-1b-it-int4.litertlm",
+                url = "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.litertlm",
                 systemPrompt = "You are Gemma, a helpful AI assistant running on device."
             ),
             ModelConfig(
                 id = "gemma4-e2b",
                 name = "Gemma 4 E2B (Int4)",
                 filename = "gemma-4-E2B-it.litertlm",
-                url = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/blob/main/gemma-4-E2B-it.litertlm",
+                url = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm",
                 systemPrompt = "You are Gemma, a helpful AI assistant running on device."
             )
         )
