@@ -147,25 +147,34 @@ class LiteRTLMManager private constructor(private val context: Context) {
 
         val backend = factory.create()
         
+        Log.i(TAG, "Initializing Engine with backend: ${factory.name}")
         val engineConfig = EngineConfig(
             modelPath = modelPath,
             backend = backend,
             // Vision + Audio backends for multimodal Gemma 4
             visionBackend = Backend.GPU(),
             audioBackend = Backend.CPU(),
-            // Cache dir speeds up 2nd load
+            // Cache dir is CRITICAL for JIT compilation - it saves the compiled binary for subsequent runs
             cacheDir = context.cacheDir.path
         )
         
+        val startTime = System.currentTimeMillis()
         val candidateEngine = Engine(engineConfig)
-        candidateEngine.initialize()
         
-        // Verify conversation works
         try {
+            candidateEngine.initialize()
+            val duration = System.currentTimeMillis() - startTime
+            Log.i(TAG, "Engine initialization SUCCEEDED in ${duration}ms")
+            
+            // Verify conversation works
             val testConv = candidateEngine.createConversation(ConversationConfig())
             testConv.close()
         } catch (e: Throwable) {
-            Log.e(TAG, "Conversation verification failed: ${e.message}")
+            val duration = System.currentTimeMillis() - startTime
+            Log.e(TAG, "Engine initialization FAILED after ${duration}ms: ${e.message}")
+            if (factory.name == "NPU" && e.message?.contains("TF_LITE_AUX") == true) {
+                Log.e(TAG, "NPU missing AOT payload and JIT compilation failed or was not triggered.")
+            }
             candidateEngine.close()
             throw e
         }
