@@ -5,7 +5,7 @@ To utilize the Snapdragon 8 Elite Hexagon NPU, you must Ahead-of-Time (AOT) comp
 > [!WARNING]
 > The `ai-edge-litert` compilation package is not currently available for native Windows Python. You must run this compilation step within **WSL (Windows Subsystem for Linux)**, a Linux VM, or a Google Colab notebook. 
 > 
-> **Highly Recommended**: Use the provided [LiteRT_Gemma4_NPU_AOT_Compilation.ipynb](file:///c:/Users/rawat/ModelGarden-QNN-LiteRT/LiteRT_Gemma4_NPU_AOT_Compilation.ipynb) in Google Colab to avoid x86_64 emulation issues on ARM64 Windows.
+> **Highly Recommended**: Use the provided [LiteRT_Gemma4_NPU_AOT_Compilation.ipynb](file:///c:/Users/rawat/ModelGarden-QNN-LiteRT/google_colab/LiteRT_Gemma4_NPU_AOT_Compilation.ipynb) in Google Colab to avoid x86_64 emulation issues on ARM64 Windows.
 
 ## Prerequisites (in WSL/Linux)
 1. Python 3.10+ installed in your Linux environment.

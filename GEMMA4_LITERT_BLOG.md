@@ -8,7 +8,7 @@ In this post, we'll explore the architectural leaps in Gemma 4, how LiteRT-LM or
 
 ---
 
-## 🧠 The Gemma 4 Architecture
+## The Gemma 4 Architecture
 
 Google's Gemma 4 represents a significant leap for open-weight edge models. The **Gemma 4 E2B** (Effective ~2 Billion parameter) model is specifically tailored for mobile and edge environments, bringing several major innovations:
 
@@ -18,7 +18,7 @@ Google's Gemma 4 represents a significant leap for open-weight edge models. The 
 
 ---
 
-## ⚡ The Engine Architecture: LiteRT & LiteRT-LM
+## The Engine Architecture: LiteRT & LiteRT-LM
 
 To run a model of this complexity on Android, we use **LiteRT** (formerly TensorFlow Lite) alongside **LiteRT-LM** (LiteRT for Large Models). Understanding the distinction between the two is key to mastering on-device AI.
 
@@ -44,7 +44,7 @@ However, utilizing the NPU requires the model to contain specific, pre-compiled 
 
 ---
 
-## 🏗️ System Architecture & Engineering Changes
+## System Architecture & Engineering Changes
 
 When upgrading our Android application from Gemma 3 to Gemma 4, we encountered several engineering hurdles—from API shifts to handling a massive 2.58GB payload under modern Android scoped storage rules.
 

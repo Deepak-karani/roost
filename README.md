@@ -2,7 +2,7 @@
 
 A premium **multimodal** on-device LLM chat application for Android, powered by **Google LiteRT-LM**. Features **Gemma 4 E2B** as the primary model with support for **text, image, and audio** inputs, running entirely on-device with **NPU/GPU/CPU** acceleration.
 
-## 🌟 Gemma 4 E2B
+## Gemma 4 E2B
 
 [Gemma 4](https://ai.google.dev/gemma/docs/core) is Google's latest family of open models, built from the same research as Gemini.
 
@@ -13,7 +13,7 @@ A premium **multimodal** on-device LLM chat application for Android, powered by 
 *   **License**: Apache 2.0 (fully open)
 *   **Model**: [`litert-community/gemma-4-E2B-it-litert-lm`](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm)
 
-## 🚀 Features
+## Features
 
 *   **Gemma 4 E2B** as the default on-device model (2.58 GB)
 *   **Multimodal Input**: Attach images from gallery and record audio directly in-app
@@ -23,7 +23,7 @@ A premium **multimodal** on-device LLM chat application for Android, powered by 
 *   **Real-time Benchmarks**: TTFT, tokens/sec, token count
 *   **Modern Premium UI**: Deep Blue & Soft Gray aesthetic with streaming responses
 
-## 📊 Benchmarks (Samsung S25 Ultra — Snapdragon 8 Elite)
+## Benchmarks (Samsung S25 Ultra - Snapdragon 8 Elite)
 
 | Metric | Gemma 4 E2B | Gemma 3n | Qwen 3 0.6B |
 | :--- | :--- | :--- | :--- |
@@ -34,7 +34,9 @@ A premium **multimodal** on-device LLM chat application for Android, powered by 
 
 > **Note**: Performance benchmarks from [the model card](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm) show excellent throughput on Android with GPU acceleration via XNNPack and ML Drift.
 
-## 🛠️ Setup & Installation
+## Setup & Installation
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/carrycooldude/ModelGarden-QNN-LiteRT/blob/main/google_colab/LiteRT_Gemma4_NPU_AOT_Compilation.ipynb)
 
 ### Prerequisites
 *   Android Studio Ladybug (or newer)
@@ -75,18 +77,18 @@ The app will automatically detect the model in `/sdcard/Download/` on launch.
 ### 4. Usage
 1.  **Launch the App**: The app detects the Gemma 4 model and initializes (NPU → GPU → CPU)
 2.  **Chat**: Type messages for text-only conversations
-3.  **Image Input**: Tap the 🖼️ gallery button to attach an image, then ask about it
-4.  **Audio Input**: Tap the 🎙️ mic button to record audio, tap again to stop
+3.  **Image Input**: Tap the gallery button to attach an image, then ask about it
+4.  **Audio Input**: Tap the mic button to record audio, tap again to stop
 5.  **Switch Models**: Settings → Select Model to try other models
 6.  **Benchmarks**: Watch real-time TTFT and tokens/sec in the header
 
-## ⚠️ Notes on Hardware Acceleration
+## Notes on Hardware Acceleration
 
 *   The app tries **NPU** first (Qualcomm Hexagon on Snapdragon 8 Elite), then falls back to **GPU** (OpenCL/ML Drift), then **CPU** (XNNPack)
 *   NPU requires device-specific libraries — falls back gracefully if unavailable
 *   `cacheDir` is used for faster model reloading on subsequent launches
 
-## 📚 References
+## References
 
 *   [Gemma 4 Overview](https://ai.google.dev/gemma/docs/core)
 *   [Gemma 4 Model Card](https://ai.google.dev/gemma/docs/core/model_card_4)
@@ -95,9 +97,9 @@ The app will automatically detect the model in `/sdcard/Download/` on launch.
 *   [LiteRT-LM Android Guide](https://ai.google.dev/edge/litert-lm/android)
 *   [LiteRT-LM Model (gemma-4-E2B-it)](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm)
 
-## 🎥 Demo
+## Demo
 
 https://github.com/user-attachments/assets/4c3c494e-a119-45d5-9726-4e43b2351ed9
 
-## 📜 License
+## License
 Apache 2.0
