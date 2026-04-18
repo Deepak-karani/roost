@@ -26,7 +26,7 @@
                 android:id="@+id/text_model_name"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Gemma 3n"
+                android:text="Gemma 4"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:textColor="@color/black"
@@ -37,7 +37,7 @@
                 android:id="@+id/text_backend_status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="NPU Gemma"
+                android:text="NPU"
                 android:textSize="12sp"
                 android:textColor="@color/brand_secondary"
                 android:background="@drawable/bg_status_pill"
@@ -61,14 +61,13 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/text_model_name" />
 
-            <!-- Hidden Spinner for Model Selection (Clicking header opens it?) -->
-            <!-- Or keep it visible as an icon? Let's use an icon -->
             <ImageView
                 android:id="@+id/icon_settings"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
                 android:src="@drawable/ic_settings" 
                 app:tint="@color/text_secondary"
+                android:contentDescription="Settings"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"/>
@@ -82,7 +81,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:clipToPadding="false"
-        android:paddingBottom="80dp"
+        android:paddingBottom="120dp"
         android:paddingTop="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toBottomOf="@id/card_header" />
@@ -95,6 +94,7 @@
         android:orientation="vertical"
         android:gravity="center"
         android:visibility="gone"
+        android:padding="32dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -109,15 +109,34 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="Initializing..."
+            android:textAlignment="center"
             android:textColor="@color/text_secondary"/>
     </LinearLayout>
+
+    <!-- Attachment Status -->
+    <TextView
+        android:id="@+id/text_attachment_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:text=""
+        android:textSize="12sp"
+        android:textColor="@color/brand_primary"
+        android:background="@color/bg_input"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        app:layout_constraintBottom_toTopOf="@id/card_input" />
 
     <!-- Input Area -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/card_input"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
+        android:layout_margin="8dp"
         app:cardCornerRadius="24dp"
         app:cardElevation="4dp"
         app:cardBackgroundColor="@color/bg_input"
@@ -129,6 +148,27 @@
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:padding="4dp">
+
+            <!-- Image Attach Button -->
+            <ImageButton
+                android:id="@+id/button_attach_image"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_gallery"
+                android:contentDescription="Attach image"
+                app:tint="@color/text_secondary" />
+
+            <!-- Audio Record Button -->
+            <ImageButton
+                android:id="@+id/button_attach_audio"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_btn_speak_now"
+                android:contentDescription="Record audio"
+                app:tint="@color/text_secondary" />
 
             <EditText
                 android:id="@+id/edit_text_message"
@@ -150,8 +190,8 @@
                 android:layout_marginEnd="8dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@android:drawable/ic_menu_send"
+                android:contentDescription="Send message"
                 app:tint="@color/brand_primary" />
-                <!-- Using system icon for now, usually should use vector asset -->
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

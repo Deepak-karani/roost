@@ -1,21 +1,34 @@
 package com.example.qnn_litertlm_gemma
 
+import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.MediaRecorder
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
-import android.widget.ArrayAdapter
 import android.widget.EditText
-import android.widget.Spinner
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.qnn_litertlm_gemma.databinding.ActivityMainBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -24,13 +37,25 @@ class MainActivity : AppCompatActivity() {
     private lateinit var liteRTLMManager: LiteRTLMManager
     private lateinit var modelDownloader: ModelDownloader
     
-    // Store conversation history
+    // Conversation history
     private val messages = mutableListOf<ChatMessage>()
     
     private var currentModel: ModelConfig? = null
+    
+    // Multimodal attachments
+    private var pendingImagePath: String? = null
+    private var pendingAudioBytes: ByteArray? = null
+    
+    // Audio recording
+    private var mediaRecorder: MediaRecorder? = null
+    private var audioFile: File? = null
+    private var isRecording = false
+
+    // Activity result launchers
+    private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var permissionLauncher: ActivityResultLauncher<Array<String>>
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        Log.e("MainActivity", "!!! MainActivity.onCreate STARTED !!!")
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -38,37 +63,75 @@ class MainActivity : AppCompatActivity() {
         liteRTLMManager = LiteRTLMManager.getInstance(this)
         modelDownloader = ModelDownloader(this)
         
-        // Settings / Token Dialog
-        binding.iconSettings.setOnClickListener {
-            // Simple logic: click -> set token, long click -> nothing for now or model select?
-            // Actually let's make it show model selection if token exists, or token dialog if not?
-            // For now, simpler: Show simple dialog with options
-            showSettingsDialog()
-        }
-
+        setupActivityResultLaunchers()
         setupRecyclerView()
         setupInput()
+        setupAttachments()
         
-        // Auto-initialize default model if ready
+        // Settings
+        binding.iconSettings.setOnClickListener { showSettingsDialog() }
+
+        // Default model: Gemma 4 E2B (first in list)
         val defaultModel = ModelDownloader.AVAILABLE_MODELS.first()
         currentModel = defaultModel
         checkAndInitialize(defaultModel)
     }
 
+    private fun setupActivityResultLaunchers() {
+        imagePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                result.data?.data?.let { uri ->
+                    handleImageUri(uri)
+                }
+            }
+        }
+        
+        permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            // Permissions handled — no action needed here as we check at use time
+        }
+    }
+
     private fun showSettingsDialog() {
-        val options = arrayOf("Set HF Token", "Select Model (Coming Soon)")
+        val options = arrayOf("Select Model", "Set HF Token", "Clear Conversation")
         AlertDialog.Builder(this)
             .setTitle("Settings")
             .setItems(options) { _, which ->
                  when (which) {
-                     0 -> showTokenDialog()
-                     1 -> Toast.makeText(this, "Only Gemma 3n supported currently", Toast.LENGTH_SHORT).show()
+                     0 -> showModelSelectionDialog()
+                     1 -> showTokenDialog()
+                     2 -> clearConversation()
                  }
             }
             .show()
     }
 
-    // setupModelSpinner removed (Model selection fixed to Gemma 3n for now per user request)
+    private fun showModelSelectionDialog() {
+        val modelNames = ModelDownloader.AVAILABLE_MODELS.map { model ->
+            val downloaded = if (modelDownloader.isModelDownloaded(model)) " ✓" else ""
+            val current = if (model.id == currentModel?.id) " (active)" else ""
+            "${model.name}$downloaded$current"
+        }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle("Select Model")
+            .setItems(modelNames) { _, which ->
+                val selected = ModelDownloader.AVAILABLE_MODELS[which]
+                if (selected.id != currentModel?.id) {
+                    currentModel = selected
+                    messages.clear()
+                    updateMessages()
+                    checkAndInitialize(selected)
+                }
+            }
+            .show()
+    }
+
+    private fun clearConversation() {
+        messages.clear()
+        updateMessages()
+        liteRTLMManager.cleanup()
+        currentModel?.let { checkAndInitialize(it) }
+    }
 
     private fun showTokenDialog() {
         val input = EditText(this)
@@ -86,7 +149,6 @@ class MainActivity : AppCompatActivity() {
                 val token = input.text.toString().trim()
                 modelDownloader.saveToken(token)
                 Toast.makeText(this, "Token saved!", Toast.LENGTH_SHORT).show()
-                // Retry download if current model failed?
                 if (currentModel != null && !modelDownloader.isModelDownloaded(currentModel!!)) {
                    checkAndInitialize(currentModel!!)
                 }
@@ -103,7 +165,6 @@ class MainActivity : AppCompatActivity() {
                 stackFromEnd = true
             }
             
-            // Scroll to bottom when keyboard opens
             addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, oldBottom ->
                 if (bottom < oldBottom) {
                     binding.recyclerViewMessages.postDelayed({
@@ -117,21 +178,20 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun setupInput() {
-        // Enable/disable send button
         binding.editTextMessage.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                // Change button color/alpha?
-                binding.buttonSend.alpha = if (!s.isNullOrBlank()) 1.0f else 0.5f
-                binding.buttonSend.isEnabled = !s.isNullOrBlank()
+                val hasContent = !s.isNullOrBlank() || pendingImagePath != null || pendingAudioBytes != null
+                binding.buttonSend.alpha = if (hasContent) 1.0f else 0.5f
+                binding.buttonSend.isEnabled = hasContent
             }
             override fun afterTextChanged(s: Editable?) {}
         })
         
         binding.buttonSend.setOnClickListener {
             val text = binding.editTextMessage.text.toString().trim()
-            if (text.isNotEmpty()) {
-                sendMessage(text)
+            if (text.isNotEmpty() || pendingImagePath != null || pendingAudioBytes != null) {
+                sendMessage(text.ifEmpty { "Describe what you see/hear." })
                 binding.editTextMessage.text?.clear()
             }
         }
@@ -139,24 +199,170 @@ class MainActivity : AppCompatActivity() {
         binding.buttonSend.alpha = 0.5f
         binding.buttonSend.isEnabled = false
     }
+
+    private fun setupAttachments() {
+        binding.buttonAttachImage.setOnClickListener { pickImage() }
+        binding.buttonAttachAudio.setOnClickListener { toggleAudioRecording() }
+    }
+
+    // ─── Image Handling ─────────────────────────────────────────
     
+    private fun pickImage() {
+        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        imagePickerLauncher.launch(intent)
+    }
+
+    private fun handleImageUri(uri: Uri) {
+        lifecycleScope.launch {
+            try {
+                // Copy to a temp file the engine can read
+                val tempFile = File(cacheDir, "attached_image.jpg")
+                withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        tempFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+                pendingImagePath = tempFile.absolutePath
+                binding.textAttachmentStatus.text = "📷 Image attached"
+                binding.textAttachmentStatus.visibility = View.VISIBLE
+                updateSendButtonState()
+                Toast.makeText(this@MainActivity, "Image attached", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "Failed to attach image: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // ─── Audio Recording ────────────────────────────────────────
+
+    private fun toggleAudioRecording() {
+        if (isRecording) {
+            stopRecording()
+        } else {
+            if (checkAudioPermission()) {
+                startRecording()
+            }
+        }
+    }
+
+    private fun checkAudioPermission(): Boolean {
+        return if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) 
+            == PackageManager.PERMISSION_GRANTED) {
+            true
+        } else {
+            permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+            false
+        }
+    }
+
+    private fun startRecording() {
+        try {
+            audioFile = File(cacheDir, "recorded_audio.m4a")
+            mediaRecorder = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(this)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
+            }).apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(16000)
+                setOutputFile(audioFile?.absolutePath)
+                prepare()
+                start()
+            }
+            isRecording = true
+            binding.buttonAttachAudio.alpha = 0.5f
+            binding.textAttachmentStatus.text = "🎙️ Recording... tap again to stop"
+            binding.textAttachmentStatus.visibility = View.VISIBLE
+            Toast.makeText(this, "Recording started", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Recording failed: ${e.message}", e)
+            Toast.makeText(this, "Recording failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun stopRecording() {
+        try {
+            mediaRecorder?.apply {
+                stop()
+                release()
+            }
+            mediaRecorder = null
+            isRecording = false
+            binding.buttonAttachAudio.alpha = 1.0f
+            
+            // Read audio bytes
+            audioFile?.let { file ->
+                if (file.exists()) {
+                    pendingAudioBytes = file.readBytes()
+                    binding.textAttachmentStatus.text = "📷🎙️ Audio recorded".let {
+                        val parts = mutableListOf<String>()
+                        if (pendingImagePath != null) parts.add("📷 Image")
+                        parts.add("🎙️ Audio")
+                        parts.joinToString(" + ") + " attached"
+                    }
+                    binding.textAttachmentStatus.visibility = View.VISIBLE
+                    updateSendButtonState()
+                    Toast.makeText(this, "Audio recorded", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Stop recording failed: ${e.message}", e)
+            Toast.makeText(this, "Stop recording failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun updateSendButtonState() {
+        val hasContent = !binding.editTextMessage.text.isNullOrBlank() || 
+                         pendingImagePath != null || 
+                         pendingAudioBytes != null
+        binding.buttonSend.alpha = if (hasContent) 1.0f else 0.5f
+        binding.buttonSend.isEnabled = hasContent
+    }
+    
+    // ─── Model Management ───────────────────────────────────────
+
     private fun checkAndInitialize(modelConfig: ModelConfig) {
         lifecycleScope.launch {
-            // Reset UI state for new model
             binding.cardInput.visibility = View.GONE
             binding.layoutLoading.visibility = View.VISIBLE
-            binding.layoutLoading.visibility = View.VISIBLE
             binding.textLoadingStatus.text = "Checking ${modelConfig.name}..."
-            
-            // Update Header
             binding.textModelName.text = modelConfig.name
             
             if (modelDownloader.isModelDownloaded(modelConfig)) {
                 initializeEngine(modelConfig)
             } else {
-                downloadModel(modelConfig)
+                // Show instructions to push via ADB first
+                showAdbOrDownloadDialog(modelConfig)
             }
         }
+    }
+
+    private fun showAdbOrDownloadDialog(modelConfig: ModelConfig) {
+        AlertDialog.Builder(this)
+            .setTitle("Model Not Found")
+            .setMessage(
+                "\"${modelConfig.name}\" is not on this device.\n\n" +
+                "Option 1 (Recommended for large models):\n" +
+                "Push via ADB from your PC:\n" +
+                "  adb push ${modelConfig.filename} /sdcard/Download/\n\n" +
+                "Option 2:\n" +
+                "Download directly on device (may be slow for large files)."
+            )
+            .setPositiveButton("Download Now") { _, _ ->
+                downloadModel(modelConfig)
+            }
+            .setNeutralButton("I'll ADB Push") { _, _ ->
+                binding.textLoadingStatus.text = "Push the model via ADB, then reopen the app.\n\nadb push ${modelConfig.filename} /sdcard/Download/"
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                binding.layoutLoading.visibility = View.GONE
+            }
+            .show()
     }
     
     private fun downloadModel(modelConfig: ModelConfig) {
@@ -169,7 +375,9 @@ class MainActivity : AppCompatActivity() {
                          binding.textLoadingStatus.text = "Starting download..."
                     }
                     is DownloadProgress.Progress -> {
-                        binding.textLoadingStatus.text = "Downloading: ${progress.percentage}%"
+                        val mb = progress.downloaded / (1024 * 1024)
+                        val totalMb = progress.total / (1024 * 1024)
+                        binding.textLoadingStatus.text = "Downloading: ${progress.percentage}% ($mb/$totalMb MB)"
                     }
                     is DownloadProgress.Complete -> {
                         binding.textLoadingStatus.text = "Download complete!"
@@ -179,7 +387,6 @@ class MainActivity : AppCompatActivity() {
                         binding.layoutLoading.visibility = View.GONE
                         binding.textLoadingStatus.text = "Error: ${progress.message}"
                         
-                        // Suggest token if 401/403 or generic error
                         if (progress.message.contains("401") || progress.message.contains("403") || progress.message.contains("404")) {
                              AlertDialog.Builder(this@MainActivity)
                                 .setTitle("Download Error")
@@ -199,14 +406,14 @@ class MainActivity : AppCompatActivity() {
     private fun initializeEngine(modelConfig: ModelConfig) {
         lifecycleScope.launch {
             binding.layoutLoading.visibility = View.VISIBLE
-            binding.textLoadingStatus.text = "Initializing ${modelConfig.name}..."
+            binding.textLoadingStatus.text = "Initializing ${modelConfig.name}...\n(NPU → GPU → CPU)"
             
             val startTime = System.currentTimeMillis()
             
             val result = liteRTLMManager.initialize(
                 modelDownloader.getModelPath(modelConfig),
                 modelConfig.systemPrompt,
-                false, // isEmbedding
+                false,
                 modelConfig.preferredBackend
             )
             
@@ -217,11 +424,10 @@ class MainActivity : AppCompatActivity() {
             if (result.isSuccess) {
                 binding.cardInput.visibility = View.VISIBLE
                 val backend = liteRTLMManager.getActiveBackendName()
-                val memory = liteRTLMManager.getMemoryUsageMb()
-                addSystemMessage("${modelConfig.name} initialized on $backend.")
+                addSystemMessage("${modelConfig.name} initialized on $backend in ${loadTime}ms.")
                 
-                binding.textBackendStatus.text = "Gemma"
-                // binding.textBenchmarkStats.text = "Ready" // Already set in XML
+                binding.textBackendStatus.text = backend
+                binding.textBenchmarkStats.text = "Load: ${loadTime}ms"
             } else {
                 val error = result.exceptionOrNull()?.message ?: "Unknown error"
                 binding.layoutLoading.visibility = View.VISIBLE
@@ -231,17 +437,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    // ─── Message Sending ────────────────────────────────────────
+
     private fun sendMessage(text: String) {
-        // Add user message to UI
-        val userMessage = ChatMessage(MessageSender.USER, text)
+        // Build display text showing what's attached
+        val attachInfo = buildString {
+            if (pendingImagePath != null) append("[📷 Image] ")
+            if (pendingAudioBytes != null) append("[🎙️ Audio] ")
+            append(text)
+        }
+        
+        val userMessage = ChatMessage(MessageSender.USER, attachInfo)
         messages.add(userMessage)
         updateMessages()
         
-        // Prepare assistant message placeholder
         val assistantMessageIndex = messages.size
         val assistantMessage = ChatMessage(MessageSender.ASSISTANT, "", isStreaming = true)
         messages.add(assistantMessage)
         updateMessages()
+        
+        // Capture and clear attachments
+        val imagePath = pendingImagePath
+        val audioBytes = pendingAudioBytes
+        clearAttachments()
         
         var firstTokenReceived = false
         var startTime = System.currentTimeMillis()
@@ -252,12 +470,15 @@ class MainActivity : AppCompatActivity() {
             var fullResponse = ""
             val requestStartTime = System.nanoTime()
             var firstTokenTime = 0L
-            // var tokenCount = 0 // Approximate - moved above
             
             try {
-                liteRTLMManager.sendMessage(text)
-                    .catch { e ->
-                        // Handle error in stream
+                val flow = if (imagePath != null || audioBytes != null) {
+                    liteRTLMManager.sendMultimodalMessage(text, imagePath, audioBytes)
+                } else {
+                    liteRTLMManager.sendMessage(text)
+                }
+                
+                flow.catch { e ->
                         messages[assistantMessageIndex] = assistantMessage.copy(
                             content = "Error: ${e.message}",
                             isStreaming = false
@@ -265,67 +486,63 @@ class MainActivity : AppCompatActivity() {
                         updateMessages()
                     }
                     .collect { messageChunk ->
-                        if (!firstTokenReceived) { // Changed condition
+                        if (!firstTokenReceived) {
                             ttft = System.currentTimeMillis() - startTime
                             firstTokenReceived = true
-                            // Reset timer for throughput
                             startTime = System.currentTimeMillis()
-                            firstTokenTime = System.nanoTime() // Kept for original benchmark calculation
+                            firstTokenTime = System.nanoTime()
                         }
                         
                         val chunkText = messageChunk.toString()
                         fullResponse += chunkText
-                        // Estimate token count roughly (e.g. 4 chars per token)
-                        // Ideally we'd use a tokenizer, but for benchmark approximation:
-                        tokenCount = fullResponse.length / 4 + 1 // Updated tokenCount logic
+                        tokenCount = fullResponse.length / 4 + 1
                         
                         messages[assistantMessageIndex] = assistantMessage.copy(
                             content = fullResponse,
                             isStreaming = true
                         )
                         chatAdapter.notifyItemChanged(assistantMessageIndex)
-                        binding.recyclerViewMessages.smoothScrollToPosition(assistantMessageIndex) // Used binding and smoothScroll
+                        binding.recyclerViewMessages.smoothScrollToPosition(assistantMessageIndex)
                         
                         val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
-                        val speed = if (elapsed > 0) String.format("%.2f", tokenCount / elapsed) else "0.00"
-                        val backend = liteRTLMManager.getActiveBackendName() // Reverted to original manager
-                        val memory = liteRTLMManager.getMemoryUsageMb() // Reverted to original manager
+                        val speed = if (elapsed > 0) String.format("%.1f", tokenCount / elapsed) else "0"
                         
-                        binding.textBenchmarkStats.text = "TTFT: ${ttft}ms | Speed: $speed t/s"
-                        // binding.textBackendStatus.text = "NPU Active" // Keep static or update only if changed
+                        binding.textBenchmarkStats.text = "TTFT: ${ttft}ms | ${speed} t/s"
                     }
                 
-                // Final update when done
+                // Finalize
                 messages[assistantMessageIndex] = assistantMessage.copy(
                     content = fullResponse,
                     isStreaming = false
                 )
                 updateMessages()
                 
-                // Final Stats (original calculation, adjusted to use new tokenCount and ttft)
                 val endTime = System.nanoTime()
-                val ttftMs = (firstTokenTime - requestStartTime) / 1_000_000 // Kept original TTFT calculation
+                val ttftMs = (firstTokenTime - requestStartTime) / 1_000_000
                 val generationTimeMs = (endTime - firstTokenTime) / 1_000_000
-                // simple TPS calculation
-                val tokens = fullResponse.length / 4.0 // Approx
+                val tokens = fullResponse.length / 4.0
                 val tps = if (generationTimeMs > 0) (tokens / (generationTimeMs / 1000.0)) else 0.0
                 
-                val backend = liteRTLMManager.getActiveBackendName()
-                val memory = liteRTLMManager.getMemoryUsageMb()
-                
                 binding.textBenchmarkStats.text = String.format(
-                    "TTFT: %dms | Speed: %.2f t/s", 
-                    ttftMs, tps
+                    "TTFT: %dms | %.1f t/s | %d tokens", 
+                    ttftMs, tps, tokens.toInt()
                 )
                 
             } catch (e: Exception) {
                 messages[assistantMessageIndex] = assistantMessage.copy(
-                    content = "Error sending message: ${e.message}",
+                    content = "Error: ${e.message}",
                     isStreaming = false
                 )
                 updateMessages()
             }
         }
+    }
+
+    private fun clearAttachments() {
+        pendingImagePath = null
+        pendingAudioBytes = null
+        binding.textAttachmentStatus.visibility = View.GONE
+        updateSendButtonState()
     }
     
     private fun addSystemMessage(text: String) {
@@ -342,6 +559,11 @@ class MainActivity : AppCompatActivity() {
     
     override fun onDestroy() {
         super.onDestroy()
+        if (isRecording) {
+            try {
+                mediaRecorder?.apply { stop(); release() }
+            } catch (_: Exception) {}
+        }
         liteRTLMManager.cleanup()
     }
 }

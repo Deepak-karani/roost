@@ -1,48 +1,45 @@
-# ModelGarden-QNN-LiteRT Android Chat
+# ModelGarden-QNN-LiteRT — Gemma 4 On-Device Chat
 
-A premium on-device LLM chat application for Android, powered by **Google LiteRT (formerly TensorFlow Lite)**. Now supporting multiple Small Language Models (SLMs) including **Gemma 3n** and **Qwen 3**.
+A premium **multimodal** on-device LLM chat application for Android, powered by **Google LiteRT-LM**. Features **Gemma 4 E2B** as the primary model with support for **text, image, and audio** inputs, running entirely on-device with **NPU/GPU/CPU** acceleration.
 
-**Gemma 3n** is Google's latest family of models enabling efficient AI on everyday devices.
-*   **"E2B"**: Effective ~2 Billion parameters.
-*   **Performance**: Capable of 30-50+ tokens/sec on modern mobile processors.
+## 🌟 Gemma 4 E2B
 
-**Qwen 3 0.6B** is a highly efficient, compact model from the LiteRT Community.
-*   **Ultra-Lightweight**: Only 0.6 Billion parameters.
-*   **High Speed**: Extremely fast on-device inference suitable for instant chat.
+[Gemma 4](https://ai.google.dev/gemma/docs/core) is Google's latest family of open models, built from the same research as Gemini.
 
-**Gemma 3 1B** is an efficient, compact model from Google.
-*   **1B**: 1 Billion parameters.
-*   **Versatile**: Pretty efficient model useful for a number of use-cases
-
-
+*   **E2B**: Effective ~2 Billion parameters — ideal for on-device deployment
+*   **Multimodal**: Understands **text + images + audio** natively
+*   **Architecture**: Per-Layer Embeddings (PLE), Shared KV Cache, variable aspect ratio vision encoder
+*   **Context**: Up to 32K tokens
+*   **License**: Apache 2.0 (fully open)
+*   **Model**: [`litert-community/gemma-4-E2B-it-litert-lm`](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm)
 
 ## 🚀 Features
 
-*   **Multi-Model Support**: Switch between **Gemma 3n (Int4)** and **Qwen 3 0.6B (Int4)** on the fly using the toolbar spinner.
-*   **Built-in Benchmarking**: Real-time display of **Time To First Token (TTFT)**, **Generation Speed (tokens/sec)**, and response length.
-*   **Secure Downloads**: 
-    *   Models are downloaded directly within the app.
-    *   **Hugging Face Token** support for accessing gated/private models.
-*   **LiteRT-LM Engine**: Latest Google AI Edge runtime with robust fallback (GPU -> CPU) to ensure stability across devices.
-*   **Modern Premium UI**:
-    *   Deep Blue & Soft Gray aesthetic.
-    *   Streaming responses with performance metrics.
-    *   Custom vector avatars and markdown support.
+*   **Gemma 4 E2B** as the default on-device model (2.58 GB)
+*   **Multimodal Input**: Attach images from gallery and record audio directly in-app
+*   **NPU → GPU → CPU** backend fallback for optimal performance on Snapdragon 8 Elite
+*   **ADB Push Support**: Push the model from PC — no in-app download needed for large files
+*   **Multi-Model Support**: Switch between Gemma 4, Gemma 3n, Qwen 3, Gemma 3 1B
+*   **Real-time Benchmarks**: TTFT, tokens/sec, token count
+*   **Modern Premium UI**: Deep Blue & Soft Gray aesthetic with streaming responses
 
-## 📊 Benchmarks (Samsung S24 Ultra)
+## 📊 Benchmarks (Samsung S25 Ultra — Snapdragon 8 Elite)
 
-| Metric | Qwen 3 0.6B (Int4) | Gemma 3n (Int4) |
-| :--- | :--- | :--- |
-| **Time To First Token** | ~690 ms | ~630 ms |
-| **Generation Speed** | **~28 tokens/sec** | ~16 tokens/sec |
-| **Use Case** | Quick Chat, Speed | Depth, Reasoning |
+| Metric | Gemma 4 E2B | Gemma 3n | Qwen 3 0.6B |
+| :--- | :--- | :--- | :--- |
+| **Model Size** | 2.58 GB | ~1.5 GB | ~0.5 GB |
+| **Modalities** | Text + Image + Audio | Text | Text |
+| **Context Length** | 32K | 8K | 4K |
+| **Backend** | NPU/GPU/CPU | GPU/CPU | GPU/CPU |
+
+> **Note**: Performance benchmarks from [the model card](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm) show excellent throughput on Android with GPU acceleration via XNNPack and ML Drift.
 
 ## 🛠️ Setup & Installation
 
 ### Prerequisites
-*   Android Studio Ladybug (or newer).
-*   Android Device (Android 10+ recommended).
-*   ~2GB free storage.
+*   Android Studio Ladybug (or newer)
+*   Samsung S25 Ultra (or any Android 10+ device with ARM64)
+*   ~3GB free storage for the model
 
 ### 1. Clone the Repository
 ```bash
@@ -50,28 +47,57 @@ git clone https://github.com/carrycooldude/ModelGarden-QNN-LiteRT.git
 cd ModelGarden-QNN-LiteRT
 ```
 
-### 2. Build & Install
-Open the project in Android Studio and run:
+### 2. Build & Install the APK
 ```bash
 ./gradlew installDebug
 ```
 
-### 3. Usage
-1.  **Launch the App**: The app will check for the default model (Gemma 3n).
-2.  **Download on Device**: If the model is missing, the app will attempt to download it automatically.
-    *   *Note:* If you see a 401/403/404 error, click the menu (three dots) -> **Set HF Token** and enter your Hugging Face API token.
-3.  **Switch Models**: Use the dropdown in the top bar to try **Qwen 3**.
-4.  **Benchmark**: Watch the green text above the input bar to see how fast your device runs!
+### 3. Push the Model via ADB (Recommended)
+
+Download the model on your PC from HuggingFace:
+```bash
+# Download the model (2.58 GB) — use curl.exe on Windows, curl on Linux/Mac
+curl -L -o gemma-4-E2B-it.litertlm "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
+
+# Push to phone
+adb push gemma-4-E2B-it.litertlm /sdcard/Download/
+```
+
+Or use the Hugging Face CLI:
+```bash
+pip install huggingface_hub
+huggingface-cli download litert-community/gemma-4-E2B-it-litert-lm gemma-4-E2B-it.litertlm --local-dir .
+adb push gemma-4-E2B-it.litertlm /sdcard/Download/
+```
+
+The app will automatically detect the model in `/sdcard/Download/` on launch.
+
+### 4. Usage
+1.  **Launch the App**: The app detects the Gemma 4 model and initializes (NPU → GPU → CPU)
+2.  **Chat**: Type messages for text-only conversations
+3.  **Image Input**: Tap the 🖼️ gallery button to attach an image, then ask about it
+4.  **Audio Input**: Tap the 🎙️ mic button to record audio, tap again to stop
+5.  **Switch Models**: Settings → Select Model to try other models
+6.  **Benchmarks**: Watch real-time TTFT and tokens/sec in the header
 
 ## ⚠️ Notes on Hardware Acceleration
-*   The app attempts to use **GPU** delegates by default.
-*   If GPU initialization fails (common with some model architectures on specific SoCs), it automatically falls back to **CPU**, which is slower but more compatible.
-*   QNN (NPU) support is experimental and depends on specific device binaries.
+
+*   The app tries **NPU** first (Qualcomm Hexagon on Snapdragon 8 Elite), then falls back to **GPU** (OpenCL/ML Drift), then **CPU** (XNNPack)
+*   NPU requires device-specific libraries — falls back gracefully if unavailable
+*   `cacheDir` is used for faster model reloading on subsequent launches
+
+## 📚 References
+
+*   [Gemma 4 Overview](https://ai.google.dev/gemma/docs/core)
+*   [Gemma 4 Model Card](https://ai.google.dev/gemma/docs/core/model_card_4)
+*   [HuggingFace Gemma 4 Collection](https://huggingface.co/collections/google/gemma-4)
+*   [HuggingFace Gemma 4 Blog](https://huggingface.co/blog/gemma4)
+*   [LiteRT-LM Android Guide](https://ai.google.dev/edge/litert-lm/android)
+*   [LiteRT-LM Model (gemma-4-E2B-it)](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm)
 
 ## 🎥 Demo
 
 https://github.com/user-attachments/assets/4c3c494e-a119-45d5-9726-4e43b2351ed9
-
 
 ## 📜 License
 Apache 2.0
