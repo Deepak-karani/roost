@@ -45,6 +45,20 @@ class LiteRTLMManager private constructor(private val context: Context) {
     companion object {
         private const val TAG = "LiteRTLMManager"
         
+        init {
+            try {
+                // Loading these explicitly helps resolve symbols for the dispatch library on SM8750
+                System.loadLibrary("LiteRt")
+                System.loadLibrary("GemmaModelConstraintProvider")
+                System.loadLibrary("LiteRtDispatch_Qualcomm")
+                System.loadLibrary("LiteRtGpuAccelerator")
+                System.loadLibrary("LiteRtOpenClAccelerator")
+                Log.i(TAG, "Native libraries loaded successfully")
+            } catch (e: UnsatisfiedLinkError) {
+                Log.w(TAG, "Could not load native libraries explicitly: ${e.message}")
+            }
+        }
+
         @Volatile
         private var INSTANCE: LiteRTLMManager? = null
         
@@ -151,10 +165,10 @@ class LiteRTLMManager private constructor(private val context: Context) {
         val engineConfig = EngineConfig(
             modelPath = modelPath,
             backend = backend,
-            // Vision + Audio backends for multimodal Gemma 4
-            visionBackend = Backend.GPU(),
+            // Use CPU for vision/audio for now to stabilize NPU text inference
+            visionBackend = Backend.CPU(),
             audioBackend = Backend.CPU(),
-            // Cache dir is CRITICAL for JIT compilation - it saves the compiled binary for subsequent runs
+            // Cache dir is CRITICAL for JIT compilation
             cacheDir = context.cacheDir.path
         )
         
