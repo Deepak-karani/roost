@@ -45,6 +45,30 @@ class LiteRTLMManager private constructor(private val context: Context) {
     companion object {
         private const val TAG = "LiteRTLMManager"
         
+        init {
+            try {
+                // Set library paths for dlopen
+                val testDir = "/data/local/tmp/gemma/litertl"
+                android.system.Os.setenv("LD_LIBRARY_PATH", testDir, true)
+                android.system.Os.setenv("ADSP_LIBRARY_PATH", testDir, true)
+                
+                // Order matters: dependencies first
+                System.loadLibrary("QnnSystem")
+                System.loadLibrary("QnnHtp")
+                System.loadLibrary("QnnHtpV79Stub")
+                System.loadLibrary("GemmaModelConstraintProvider")
+                System.loadLibrary("LiteRt")
+                System.loadLibrary("LiteRtDispatch_Qualcomm")
+                System.loadLibrary("LiteRtGpuAccelerator")
+                System.loadLibrary("LiteRtOpenClAccelerator")
+                Log.i(TAG, "Native libraries loaded successfully")
+            } catch (e: UnsatisfiedLinkError) {
+                Log.w(TAG, "Could not load native libraries explicitly: ${e.message}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set environment variables: ${e.message}")
+            }
+        }
+
         @Volatile
         private var INSTANCE: LiteRTLMManager? = null
         
@@ -77,7 +101,8 @@ class LiteRTLMManager private constructor(private val context: Context) {
             } else {
                 // Build ordered backend list based on preference
                 val backends = buildBackendList(preferredBackend)
-                initializeEngineWithFallback(modelPath, backends)
+                val testModelPath = "/data/local/tmp/gemma/litertl/model.litertlm"
+                initializeEngineWithFallback(testModelPath, backends)
             }
             isInitialized = true
             Log.i(TAG, "Initialization SUCCEEDED on backend: $currentBackendName")
@@ -94,8 +119,10 @@ class LiteRTLMManager private constructor(private val context: Context) {
      */
     private fun buildBackendList(preferred: String?): List<BackendFactory> {
         val allBackends = listOf(
-            BackendFactory("NPU") {
-                Backend.NPU(nativeLibraryDir = context.applicationInfo.nativeLibraryDir)
+            BackendFactory("NPU", nativeLibraryDir = "/data/local/tmp/gemma/litertl") {
+                val libDir = "/data/local/tmp/gemma/litertl"
+                Log.i(TAG, "Using native library dir for NPU: $libDir")
+                Backend.NPU(nativeLibraryDir = libDir)
             },
             BackendFactory("GPU") { Backend.GPU() },
             BackendFactory("CPU") { Backend.CPU() }
@@ -148,13 +175,20 @@ class LiteRTLMManager private constructor(private val context: Context) {
         val backend = factory.create()
         
         Log.i(TAG, "Initializing Engine with backend: ${factory.name}")
+        
+        // CRITICAL for NPU on some devices: point to where SKEL files are
+        try {
+            val libDir = factory.nativeLibraryDir ?: context.applicationInfo.nativeLibraryDir
+            android.system.Os.setenv("ADSP_LIBRARY_PATH", libDir, true)
+            Log.i(TAG, "Set ADSP_LIBRARY_PATH to $libDir")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set ADSP_LIBRARY_PATH: ${e.message}")
+        }
+
         val engineConfig = EngineConfig(
             modelPath = modelPath,
             backend = backend,
-            // Vision + Audio backends for multimodal Gemma 4
-            visionBackend = Backend.GPU(),
-            audioBackend = Backend.CPU(),
-            // Cache dir is CRITICAL for JIT compilation - it saves the compiled binary for subsequent runs
+            // Cache dir is CRITICAL for JIT compilation
             cacheDir = context.cacheDir.path
         )
         
@@ -283,5 +317,6 @@ class LiteRTLMManager private constructor(private val context: Context) {
  */
 private data class BackendFactory(
     val name: String,
+    val nativeLibraryDir: String? = null,
     val create: () -> Backend
 )

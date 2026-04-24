@@ -15,7 +15,7 @@ A premium **multimodal** on-device LLM chat application for Android, powered by 
 
 ## Features
 
-*   **Gemma 4 E2B** as the default on-device model (2.58 GB)
+*   **Gemma 4 2B (S25 Ultra NPU)**: Optimized build for SM8750 NPU (2.76 GB)
 *   **Multimodal Input**: Attach images from gallery and record audio directly in-app
 *   **NPU → GPU → CPU** backend fallback for optimal performance on Snapdragon 8 Elite
 *   **ADB Push Support**: Push the model from PC — no in-app download needed for large files
@@ -62,7 +62,7 @@ Download the model on your PC from HuggingFace:
 curl -L -o gemma-4-E2B-it.litertlm "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
 
 # Push to phone
-adb push gemma-4-E2B-it.litertlm /sdcard/Download/
+adb push gemma4_2b_181450_244_sm8750.litertlm /sdcard/Download/
 ```
 
 Or use the Hugging Face CLI:

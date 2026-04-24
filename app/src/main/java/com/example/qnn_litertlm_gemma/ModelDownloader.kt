@@ -33,6 +33,14 @@ class ModelDownloader(private val context: Context) {
         // Gemma 4 E2B is the default (first in list)
         val AVAILABLE_MODELS = listOf(
             ModelConfig(
+                id = "gemma4-e2b-sm8750",
+                name = "Gemma 4 2B (S25 Ultra NPU)",
+                filename = "gemma4_2b_181450_244_sm8750.litertlm",
+                url = "local", // Pushed via ADB
+                systemPrompt = "You are Gemma 4, a powerful multimodal AI assistant by Google, optimized for the Snapdragon 8 Elite NPU. You can understand text, images, and audio.",
+                preferredBackend = "NPU"
+            ),
+            ModelConfig(
                 id = "gemma4-e2b",
                 name = "Gemma 4 E2B (Int4)",
                 filename = "gemma-4-E2B-it.litertlm",

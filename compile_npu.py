@@ -20,9 +20,9 @@ def compile_for_npu(model_path):
         return
 
     print(f"Starting AOT compilation for {model_path}...")
-    print("Target: Snapdragon 8 Elite (SM8850)")
+    print("Target: Snapdragon 8 Elite (SM8750)")
     
-    sm8850_target = qnn_target.Target(qnn_target.SocModel.SM8850)
+    sm8750_target = qnn_target.Target(qnn_target.SocModel.SM8750)
     
     try:
         # Create output directory
@@ -33,7 +33,7 @@ def compile_for_npu(model_path):
         compiled_models = aot_lib.aot_compile(
             model_path, 
             output_dir=out_dir,
-            target=[sm8850_target]
+            target=[sm8750_target]
         )
         print(f"Compilation successful! Output saved in '{out_dir}/'")
         print("The compiled model should now contain the TF_LITE_AUX payload.")

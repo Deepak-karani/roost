@@ -16,3 +16,14 @@ local.properties
 /app/build
 *.litertlm
 *.bin
+
+# Temporary and Large Files
+.venv/
+.venv_wsl/
+*.zip
+qairt_sdk/
+qualcomm_runtime_v*/
+runtime_strings/
+scratch/
+view.xm
+google_tensor_runtime/
