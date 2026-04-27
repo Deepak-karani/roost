@@ -1,21 +1,20 @@
-# ModelGarden-QNN-LiteRT — Gemma 4 On-Device Chat
+# ModelGarden-QNN-LiteRT — Gemma 4 Models On-Device Chat
 
-A premium **multimodal** on-device LLM chat application for Android, powered by **Google LiteRT-LM**. Features **Gemma 4 E2B** as the primary model with support for **text, image, and audio** inputs, running entirely on-device with **NPU/GPU/CPU** acceleration.
+A premium **multimodal** on-device LLM chat application for Android, powered by **Google LiteRT-LM**. Features **Gemma 4 models** with support for **text, image, and audio** inputs, running entirely on-device with **NPU/GPU/CPU** acceleration.
 
-## Gemma 4 E2B
+## [Gemma 4 Models](https://ai.google.dev/gemma/docs/core)
 
 [Gemma 4](https://ai.google.dev/gemma/docs/core) is Google's latest family of open models, built from the same research as Gemini.
 
-*   **E2B**: Effective ~2 Billion parameters — ideal for on-device deployment
 *   **Multimodal**: Understands **text + images + audio** natively
 *   **Architecture**: Per-Layer Embeddings (PLE), Shared KV Cache, variable aspect ratio vision encoder
 *   **Context**: Up to 32K tokens
 *   **License**: Apache 2.0 (fully open)
-*   **Model**: [`litert-community/gemma-4-E2B-it-litert-lm`](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm)
+*   **Collection**: [HuggingFace Gemma 4 Collection](https://huggingface.co/collections/google/gemma-4)
 
 ## Features
 
-*   **Gemma 4 2B (S25 Ultra NPU)**: Optimized build for SM8750 NPU (2.76 GB)
+*   **Gemma 4 models** as the default on-device models
 *   **Multimodal Input**: Attach images from gallery and record audio directly in-app
 *   **NPU → GPU → CPU** backend fallback for optimal performance on Snapdragon 8 Elite
 *   **ADB Push Support**: Push the model from PC — no in-app download needed for large files
@@ -25,14 +24,14 @@ A premium **multimodal** on-device LLM chat application for Android, powered by 
 
 ## Benchmarks (Samsung S25 Ultra - Snapdragon 8 Elite)
 
-| Metric | Gemma 4 E2B | Gemma 3n | Qwen 3 0.6B |
+| Metric | Gemma 4 | Gemma 3n | Qwen 3 0.6B |
 | :--- | :--- | :--- | :--- |
-| **Model Size** | 2.58 GB | ~1.5 GB | ~0.5 GB |
+| **Model Size** | Variable | ~1.5 GB | ~0.5 GB |
 | **Modalities** | Text + Image + Audio | Text | Text |
 | **Context Length** | 32K | 8K | 4K |
 | **Backend** | NPU/GPU/CPU | GPU/CPU | GPU/CPU |
 
-> **Note**: Performance benchmarks from [the model card](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm) show excellent throughput on Android with GPU acceleration via XNNPack and ML Drift.
+> **Note**: Performance benchmarks from the [Gemma 4 family](https://ai.google.dev/gemma/docs/core) show excellent throughput on Android with GPU acceleration via XNNPack and ML Drift.
 
 ## Setup & Installation
 
@@ -56,20 +55,22 @@ cd ModelGarden-QNN-LiteRT
 
 ### 3. Push the Model via ADB (Recommended)
 
-Download the model on your PC from HuggingFace:
+Download the **LiteRT Community Gemma 4** model on your PC from HuggingFace:
 ```bash
-# Download the model (2.58 GB) — use curl.exe on Windows, curl on Linux/Mac
-curl -L -o gemma-4-E2B-it.litertlm "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
+# Download the LiteRT Community Gemma 4 model
+curl -L -o gemma-4.litertlm "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
 
 # Push to phone
-adb push gemma4_2b_181450_244_sm8750.litertlm /sdcard/Download/
+adb push gemma-4.litertlm /sdcard/Download/
 ```
 
 Or use the Hugging Face CLI:
 ```bash
 pip install huggingface_hub
+# Download the LiteRT Community Gemma 4 model
 huggingface-cli download litert-community/gemma-4-E2B-it-litert-lm gemma-4-E2B-it.litertlm --local-dir .
-adb push gemma-4-E2B-it.litertlm /sdcard/Download/
+mv gemma-4-E2B-it.litertlm gemma-4.litertlm
+adb push gemma-4.litertlm /sdcard/Download/
 ```
 
 The app will automatically detect the model in `/sdcard/Download/` on launch.
@@ -95,7 +96,7 @@ The app will automatically detect the model in `/sdcard/Download/` on launch.
 *   [HuggingFace Gemma 4 Collection](https://huggingface.co/collections/google/gemma-4)
 *   [HuggingFace Gemma 4 Blog](https://huggingface.co/blog/gemma4)
 *   [LiteRT-LM Android Guide](https://ai.google.dev/edge/litert-lm/android)
-*   [LiteRT-LM Model (gemma-4-E2B-it)](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm)
+*   [LiteRT-LM Models](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm)
 
 ## Demo
 
