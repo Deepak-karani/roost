@@ -13,18 +13,24 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        try {
+            enableEdgeToEdge()
 
-        val appContainer = AppContainer(applicationContext)
-        appContainer.initAction = { initializeAI(appContainer) }
+            val appContainer = AppContainer(applicationContext)
+            appContainer.initAction = { initializeAI(appContainer) }
 
-        // Initialize the NPU model in the background
-        initializeAI(appContainer)
+            // Initialize the NPU model in the background
+            initializeAI(appContainer)
 
-        setContent {
-            DragonBudgetTheme {
-                DragonBudgetNavHost(appContainer = appContainer)
+            setContent {
+                DragonBudgetTheme {
+                    DragonBudgetNavHost(appContainer = appContainer)
+                }
             }
+        } catch (e: Throwable) {
+            e.printStackTrace()
+            android.util.Log.e("MainActivity", "CRITICAL STARTUP ERROR", e)
+            android.widget.Toast.makeText(this, "Startup Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 

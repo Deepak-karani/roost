@@ -48,6 +48,12 @@ android {
             useLegacyPackaging = true
         }
     }
+
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("../litert_npu_runtime_libraries/qualcomm_runtime_v79")
+        }
+    }
 }
 
 dependencies {

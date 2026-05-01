@@ -26,7 +26,8 @@ abstract class DragonBudgetDatabase : RoomDatabase() {
                     context.applicationContext,
                     DragonBudgetDatabase::class.java,
                     "dragonbudget.db"
-                ).build()
+                ).fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

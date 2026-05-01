@@ -107,6 +107,31 @@ fun HomeScreen(
                             )
                         }
                     }
+                    
+                    // AI Status Indicator
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = (if (appContainer.liteRTLMManager.isEngineReady()) TealAccent else HealthRed).copy(alpha = 0.1f),
+                        modifier = Modifier.clickable { onNavigateToAskDragon() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(if (appContainer.liteRTLMManager.isEngineReady()) TealAccent else HealthRed, CircleShape)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (appContainer.liteRTLMManager.isEngineReady()) "NPU AI READY" else "NPU LOADING",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (appContainer.liteRTLMManager.isEngineReady()) TealAccent else HealthRed
+                            )
+                        }
+                    }
                 }
             }
 
