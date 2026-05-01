@@ -30,22 +30,34 @@ class ModelDownloader(private val context: Context) {
         private const val TAG = "ModelDownloader"
         private const val KEY_HF_TOKEN = "hf_token"
 
-        // Gemma 4 E2B is the default (first in list)
+        // The universal Gemma 4 E2B file runs on GPU/CPU on any device. Listed
+        // first so it's preferred when present. The Qualcomm SM8750 NPU
+        // pre-compiles are kept for completeness but their decode path is
+        // currently UNIMPLEMENTED in litertlm-android, so they cannot
+        // actually generate text — only prefill works.
         val AVAILABLE_MODELS = listOf(
+            ModelConfig(
+                id = "gemma4-e2b",
+                name = "Gemma 4 E2B (universal)",
+                filename = "gemma-4-E2B-it.litertlm",
+                url = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm",
+                systemPrompt = "You are SnapDragon, a friendly on-device budgeting companion. Answer briefly, in under 40 words.",
+                preferredBackend = "GPU"
+            ),
+            ModelConfig(
+                id = "gemma4-qualcomm-sm8750",
+                name = "Gemma 4 Qualcomm SM8750",
+                filename = "Gemma 4 Qualcomm SM8750.litertlm",
+                url = "local",
+                systemPrompt = "You are SnapDragon, a friendly on-device budgeting companion. Answer briefly, in under 40 words.",
+                preferredBackend = "NPU"
+            ),
             ModelConfig(
                 id = "gemma4-e2b-sm8750",
                 name = "Gemma 4 2B (S25 Ultra NPU)",
                 filename = "gemma4_2b_181450_244_sm8750.litertlm",
-                url = "local", // Pushed via ADB
-                systemPrompt = "You are Gemma 4, a powerful multimodal AI assistant by Google, optimized for the Snapdragon 8 Elite NPU. You can understand text, images, and audio.",
-                preferredBackend = "NPU"
-            ),
-            ModelConfig(
-                id = "gemma4-e2b",
-                name = "Gemma 4 E2B (Int4)",
-                filename = "gemma-4-E2B-it.litertlm",
-                url = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm",
-                systemPrompt = "You are Gemma 4, a powerful multimodal AI assistant by Google, running privately on-device. You can understand text, images, and audio.",
+                url = "local",
+                systemPrompt = "You are SnapDragon, a friendly on-device budgeting companion. Answer briefly, in under 40 words.",
                 preferredBackend = "NPU"
             ),
             ModelConfig(

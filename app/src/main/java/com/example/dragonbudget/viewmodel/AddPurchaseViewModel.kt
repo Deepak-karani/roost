@@ -16,6 +16,20 @@ class AddPurchaseViewModel(private val container: AppContainer) : ViewModel() {
     private val _saved = MutableStateFlow(false)
     val saved: StateFlow<Boolean> = _saved
 
+    val dragonHealth: StateFlow<Int> = repo.getDragonState()
+        .map { it?.health ?: 80 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80)
+
+    val moneyLeftRatio: StateFlow<Float> = combine(
+        repo.getAllPurchases(),
+        repo.getAllCategories()
+    ) { _, _ ->
+        val cats = repo.getCategoriesWithSpent()
+        val limit = cats.sumOf { it.weeklyLimit }
+        if (limit <= 0.0) 1f
+        else ((limit - cats.sumOf { it.spentAmount }) / limit).toFloat()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1f)
+
     // Single-item scan (legacy)
     private val _scanResult = MutableStateFlow<PurchaseDraft?>(null)
     val scanResult: StateFlow<PurchaseDraft?> = _scanResult
@@ -43,9 +57,10 @@ class AddPurchaseViewModel(private val container: AppContainer) : ViewModel() {
             val cats = repo.getCategoriesWithSpent()
             val catInfo = cats.find { it.name == category }
             val percentUsed = catInfo?.percentUsed ?: 0f
+            val overallRatio = overallRatio(cats)
 
             val currentDragon = repo.getDragonStateOnce()
-            val updatedDragon = DragonStateEngine.onPurchase(currentDragon, category, percentUsed)
+            val updatedDragon = DragonStateEngine.onPurchase(currentDragon, category, percentUsed, overallRatio)
             repo.updateDragonState(updatedDragon)
 
             _saved.value = true
@@ -76,13 +91,21 @@ class AddPurchaseViewModel(private val container: AppContainer) : ViewModel() {
                 .maxByOrNull { it.value.size }?.key ?: "Other"
             val catInfo = cats.find { it.name == mainCategory }
             val percentUsed = catInfo?.percentUsed ?: 0f
+            val overallRatio = overallRatio(cats)
 
             val currentDragon = repo.getDragonStateOnce()
-            val updatedDragon = DragonStateEngine.onPurchase(currentDragon, mainCategory, percentUsed)
+            val updatedDragon = DragonStateEngine.onPurchase(currentDragon, mainCategory, percentUsed, overallRatio)
             repo.updateDragonState(updatedDragon)
 
             _saved.value = true
         }
+    }
+
+    private fun overallRatio(cats: List<BudgetCategoryWithSpent>): Float {
+        val totalLimit = cats.sumOf { it.weeklyLimit }
+        if (totalLimit <= 0.0) return 0f
+        val totalSpent = cats.sumOf { it.spentAmount }
+        return (totalSpent / totalLimit).toFloat()
     }
 
     /**
@@ -96,6 +119,12 @@ class AddPurchaseViewModel(private val container: AppContainer) : ViewModel() {
             updatedItems[index] = item.copy(selected = !item.selected)
             _receiptScan.value = current.copy(items = updatedItems)
         }
+    }
+
+    fun clearScan() {
+        _receiptScan.value = null
+        _scanResult.value = null
+        _scanError.value = null
     }
 
     fun scanReceipt(uri: Uri) {

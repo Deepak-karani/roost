@@ -119,29 +119,4 @@ object Categories {
         OTHER to "📦"
     )
 
-    val DEFAULT_LIMITS = mapOf(
-        FOOD to 50.0,
-        GROCERIES to 120.0,
-        GAS to 60.0,
-        SCHOOL to 40.0,
-        ENTERTAINMENT to 60.0,
-        SHOPPING to 80.0,
-        HOUSEHOLD to 50.0,
-        OTHER to 40.0
-    )
-
-    val LIFESTYLE_PRESETS = mapOf(
-        "Student" to mapOf(
-            FOOD to 40.0, GROCERIES to 80.0, GAS to 30.0, SCHOOL to 100.0, 
-            ENTERTAINMENT to 50.0, SHOPPING to 40.0, HOUSEHOLD to 30.0, OTHER to 30.0
-        ),
-        "Professional" to mapOf(
-            FOOD to 150.0, GROCERIES to 200.0, GAS to 100.0, SCHOOL to 20.0, 
-            ENTERTAINMENT to 150.0, SHOPPING to 200.0, HOUSEHOLD to 150.0, OTHER to 100.0
-        ),
-        "Thrifty" to mapOf(
-            FOOD to 30.0, GROCERIES to 60.0, GAS to 40.0, SCHOOL to 10.0, 
-            ENTERTAINMENT to 20.0, SHOPPING to 20.0, HOUSEHOLD to 20.0, OTHER to 20.0
-        )
-    )
 }

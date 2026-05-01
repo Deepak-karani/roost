@@ -20,6 +20,24 @@ class AskDragonViewModel(private val container: AppContainer) : ViewModel() {
     val recentAdvice: StateFlow<List<AIAdvice>> = repo.getRecentAdvice()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val dragonName: StateFlow<String> = repo.getDragonState()
+        .map { it?.name ?: "your dragon" }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "your dragon")
+
+    val dragonHealth: StateFlow<Int> = repo.getDragonState()
+        .map { it?.health ?: 80 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80)
+
+    val moneyLeftRatio: StateFlow<Float> = combine(
+        repo.getAllPurchases(),
+        repo.getAllCategories()
+    ) { _, _ ->
+        val cats = repo.getCategoriesWithSpent()
+        val limit = cats.sumOf { it.weeklyLimit }
+        if (limit <= 0.0) 1f
+        else ((limit - cats.sumOf { it.spentAmount }) / limit).toFloat()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1f)
+
     fun askDragon(question: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -40,7 +58,8 @@ class AskDragonViewModel(private val container: AppContainer) : ViewModel() {
                 // Save to history
                 repo.saveAdvice(question, answer)
             } catch (e: Exception) {
-                _response.value = "SnapDragon encountered an error: ${e.message}"
+                val name = runCatching { repo.getDragonStateOnce().name }.getOrDefault("Your dragon")
+                _response.value = "$name encountered an error: ${e.message}"
             } finally {
                 _isLoading.value = false
             }

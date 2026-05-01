@@ -52,25 +52,28 @@ class LiteRTLMManager private constructor(private val context: Context) {
         
         init {
             try {
-                // Set library paths for dlopen
-                val testDir = "/data/local/tmp/gemma/litertl"
-                android.system.Os.setenv("LD_LIBRARY_PATH", testDir, true)
-                android.system.Os.setenv("ADSP_LIBRARY_PATH", testDir, true)
+                // Primary native library loading sequence
+                Log.i(TAG, "Attempting to load native AI libraries...")
                 
-                // Order matters: dependencies first
-                System.loadLibrary("QnnSystem")
-                System.loadLibrary("QnnHtp")
-                System.loadLibrary("QnnHtpV79Stub")
-                System.loadLibrary("GemmaModelConstraintProvider")
-                System.loadLibrary("LiteRt")
-                System.loadLibrary("LiteRtDispatch_Qualcomm")
-                System.loadLibrary("LiteRtGpuAccelerator")
-                System.loadLibrary("LiteRtOpenClAccelerator")
-                Log.i(TAG, "Native libraries loaded successfully")
-            } catch (e: UnsatisfiedLinkError) {
-                Log.w(TAG, "Could not load native libraries explicitly: ${e.message}")
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to set environment variables: ${e.message}")
+                val libs = listOf(
+                    "LiteRt", // CORE FIRST to expose symbols like LiteRtGetEnvironmentOptions
+                    "QnnSystem", "QnnHtp", "QnnHtpV79Stub", 
+                    "GemmaModelConstraintProvider", 
+                    "LiteRtDispatch_Qualcomm", "LiteRtGpuAccelerator", 
+                    "LiteRtOpenClAccelerator"
+                )
+                
+                for (lib in libs) {
+                    try {
+                        System.loadLibrary(lib)
+                        Log.d(TAG, "Loaded $lib")
+                    } catch (e: UnsatisfiedLinkError) {
+                        Log.w(TAG, "Optional library $lib not found: ${e.message}")
+                    }
+                }
+                Log.i(TAG, "Native library loading sequence completed")
+            } catch (e: Throwable) {
+                Log.e(TAG, "Critical failure in native library loading: ${e.message}")
             }
         }
 
@@ -123,22 +126,21 @@ class LiteRTLMManager private constructor(private val context: Context) {
      */
     private fun buildBackendList(preferred: String?): List<BackendFactory> {
         val allBackends = listOf(
-            BackendFactory("NPU", nativeLibraryDir = "/data/local/tmp/gemma/litertl") {
-                val libDir = "/data/local/tmp/gemma/litertl"
+            BackendFactory("NPU") {
+                val libDir = context.applicationInfo.nativeLibraryDir
                 Log.i(TAG, "Using native library dir for NPU: $libDir")
                 Backend.NPU(nativeLibraryDir = libDir)
             },
             BackendFactory("GPU") { Backend.GPU() },
             BackendFactory("CPU") { Backend.CPU() }
         )
-        
+
         if (preferred == null) return allBackends
-        
+
         val preferredUpper = preferred.uppercase()
         val preferredIdx = allBackends.indexOfFirst { it.name == preferredUpper }
-        
+
         return if (preferredIdx > 0) {
-            // Move preferred to front, keep rest in order
             listOf(allBackends[preferredIdx]) + allBackends.filterIndexed { i, _ -> i != preferredIdx }
         } else {
             allBackends
@@ -228,13 +230,22 @@ class LiteRTLMManager private constructor(private val context: Context) {
     }
 
     /**
-     * Start a new conversation.
+     * Start a new conversation. Closes any existing one first — LiteRT-LM only
+     * permits a single live session per engine, and trying to create a second
+     * one fails with "FAILED PRECONDITION: a session already exists".
      */
     fun startConversation(systemPrompt: String? = null) {
         if (!isInitialized || engine == null) {
             throw IllegalStateException("Engine not initialized.")
         }
-        
+
+        try {
+            conversation?.close()
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to close prior conversation: ${e.message}")
+        }
+        conversation = null
+
         val conversationConfig = ConversationConfig(
             systemInstruction = if (systemPrompt != null) Contents.of(systemPrompt) else null,
             samplerConfig = SamplerConfig(

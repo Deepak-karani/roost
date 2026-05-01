@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -18,13 +19,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.dragonbudget.AppContainer
 import com.example.dragonbudget.data.*
+import com.example.dragonbudget.ui.components.SoftCard
+import com.example.dragonbudget.ui.components.SoftProgressBar
 import com.example.dragonbudget.ui.theme.*
 import com.example.dragonbudget.viewmodel.BudgetViewModel
 
@@ -41,30 +47,7 @@ fun BudgetScreen(
     var showResetDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Weekly Budgets") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showResetDialog = true }) {
-                        Icon(
-                            Icons.Default.DeleteSweep, 
-                            contentDescription = "Reset All",
-                            tint = HealthRed
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = DragonDark,
-                    titleContentColor = TextPrimary
-                )
-            )
-        },
-        containerColor = DragonDark
+        containerColor = DragonBackground
     ) { padding ->
 
         // Reset confirmation dialog
@@ -98,77 +81,67 @@ fun BudgetScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 40.dp)
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            contentPadding = PaddingValues(top = 24.dp, bottom = 40.dp)
         ) {
-            // ── Lifestyle Header ──
-            item {
-                Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text(
-                        "Budget Goals",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Customize limits for your lifestyle",
-                            fontSize = 14.sp,
-                            color = TextSecondary
-                        )
-                        TextButton(
-                            onClick = { showResetDialog = true },
-                            colors = ButtonDefaults.textButtonColors(contentColor = HealthRed)
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Reset Week", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
-
-            // ── Lifestyle Presets ──
+            // ── Title with Back Button ──
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Categories.LIFESTYLE_PRESETS.keys.forEach { preset ->
-                        FilterChip(
-                            selected = false, // We don't track the active preset, just apply it
-                            onClick = { viewModel.applyLifestylePreset(preset) },
-                            label = { Text(preset) },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = DragonSurface,
-                                labelColor = TextPrimary
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
-                                selected = false,
-                                borderColor = DragonBorder
-                            )
-                        )
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
+                    Text(
+                        text = "WEEKLY BUDGETS",
+                        style = DragonTypography.headlineLarge,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.width(48.dp))
                 }
             }
-            
+
             // ── Categories List ──
             items(categories) { cat ->
                 BudgetCategoryCard(
                     category = cat,
                     onUpdateLimit = { newLimit ->
                         viewModel.updateLimit(cat.name, newLimit)
-                    },
-                    onUpdateSpent = { newSpent ->
-                        viewModel.adjustCategorySpent(cat.name, newSpent)
                     }
                 )
+            }
+
+            // ── Reset Button ──
+            item {
+                SoftCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = HealthRed,
+                    onClick = { showResetDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(vertical = 16.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.RestartAlt,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Reset Budget & Activity",
+                            style = DragonTypography.headlineMedium,
+                            fontSize = 18.sp,
+                            color = Color.White
+                        )
+                    }
+                }
             }
         }
     }
@@ -177,172 +150,107 @@ fun BudgetScreen(
 @Composable
 fun BudgetCategoryCard(
     category: BudgetCategoryWithSpent,
-    onUpdateLimit: (Double) -> Unit,
-    onUpdateSpent: (Double) -> Unit
+    onUpdateLimit: (Double) -> Unit
 ) {
     var showEdit by remember { mutableStateOf(false) }
     var editLimitValue by remember { mutableStateOf("") }
-    var editSpentValue by remember { mutableStateOf("") }
 
-    val progressColor = when {
-        category.percentUsed >= 1.0f -> HealthRed
-        category.percentUsed >= 0.8f -> HealthAmber
-        else -> TealAccent
-    }
-
-    val animatedProgress by animateFloatAsState(
-        targetValue = category.percentUsed.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
-        label = "progress_anim"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(DragonCard, RoundedCornerShape(20.dp))
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Emoji bubble
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = DragonBorder.copy(alpha = 0.5f),
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Text(category.iconEmoji, fontSize = 18.sp)
-                    }
-                }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        category.name,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary,
-                        fontSize = 15.sp
-                    )
-                    Text(
-                        "\$${String.format("%.0f", category.spentAmount)} of \$${String.format("%.0f", category.weeklyLimit)}",
-                        color = TextSecondary,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    "\$${String.format("%.0f", category.remaining)}",
-                    fontWeight = FontWeight.Bold,
-                    color = if (category.remaining <= 0) HealthRed else TealAccent,
-                    fontSize = 18.sp
-                )
-                Text(
-                    if (category.remaining > 0) "left" else "over",
-                    color = TextMuted,
-                    fontSize = 11.sp
-                )
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        LinearProgressIndicator(
-            progress = { animatedProgress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
-            color = progressColor,
-            trackColor = DragonBorder,
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "${(category.percentUsed * 100).toInt()}%",
-                color = progressColor,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
-            TextButton(
-                onClick = {
-                    editLimitValue = String.format("%.0f", category.weeklyLimit)
-                    editSpentValue = String.format("%.0f", category.spentAmount)
-                    showEdit = !showEdit
-                },
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+    SoftCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Edit", color = ElectricBlue, fontSize = 12.sp)
-            }
-        }
-
-        if (showEdit) {
-            Spacer(Modifier.height(12.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = editLimitValue,
-                        onValueChange = { editLimitValue = it },
-                        label = { Text("Weekly Limit") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = editSpentValue,
-                        onValueChange = { editSpentValue = it },
-                        label = { Text("Spent to Date") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Reset Spent Button
-                    OutlinedButton(
-                        onClick = {
-                            onUpdateSpent(0.0)
-                            showEdit = false
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = DragonOrange)
-                    ) {
-                        Text("Reset Spent", fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(category.iconEmoji, fontSize = 28.sp)
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            category.name,
+                            style = DragonTypography.headlineMedium,
+                            fontSize = 20.sp
+                        )
+                        Text(
+                            "\$${String.format("%.0f", category.spentAmount)} spent",
+                            style = DragonTypography.bodyMedium,
+                            color = TextSecondary
+                        )
                     }
+                }
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "\$${String.format("%.0f", category.weeklyLimit)}",
+                            style = DragonTypography.headlineMedium,
+                            fontSize = 24.sp,
+                            color = if (category.percentUsed >= 1f) HealthRed else TextPrimary
+                        )
+                        Text(
+                            "Limit",
+                            style = DragonTypography.bodySmall,
+                            color = TextMuted
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(
+                        onClick = {
+                            editLimitValue = String.format("%.0f", category.weeklyLimit)
+                            showEdit = !showEdit
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (showEdit) Icons.Default.Close else Icons.Default.Edit,
+                            contentDescription = if (showEdit) "Cancel edit" else "Edit limit",
+                            tint = TextSecondary
+                        )
+                    }
+                }
+            }
 
-                    // Save Button
+            Spacer(Modifier.height(16.dp))
+
+            SoftProgressBar(
+                progress = category.percentUsed,
+                label = "USED",
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            if (showEdit) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .background(Color(0xFFB5AD9E), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        BasicTextField(
+                            value = editLimitValue,
+                            onValueChange = { editLimitValue = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true
+                        )
+                    }
+                    
                     Button(
                         onClick = {
                             val newLimit = editLimitValue.toDoubleOrNull()
-                            val newSpent = editSpentValue.toDoubleOrNull()
                             if (newLimit != null) onUpdateLimit(newLimit)
-                            if (newSpent != null) onUpdateSpent(newSpent)
                             showEdit = false
                         },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = ElectricBlue),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentBeige),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Save Changes", fontSize = 12.sp)
+                        Text("Save", fontWeight = FontWeight.Bold)
                     }
                 }
             }

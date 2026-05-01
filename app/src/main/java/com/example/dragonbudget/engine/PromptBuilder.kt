@@ -22,7 +22,7 @@ object PromptBuilder {
         }
 
         return """
-You are SnapDragon, an offline budgeting companion.
+You are ${dragon.name}, an offline budgeting companion.
 Use only the local spending data below.
 Do not invent transactions.
 Keep response under 40 words.

@@ -15,9 +15,12 @@ class BudgetViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         refreshCategories()
-        // Auto-refresh when purchases change
+        // Auto-refresh when purchases or category limits change.
         viewModelScope.launch {
-            repo.getAllPurchases().collect {
+            combine(
+                repo.getAllPurchases(),
+                repo.getAllCategories()
+            ) { _, _ -> Unit }.collect {
                 refreshCategories()
             }
         }
@@ -40,16 +43,6 @@ class BudgetViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             repo.clearAllPurchases()
             repo.resetDragonState()
-            refreshCategories()
-        }
-    }
-
-    fun applyLifestylePreset(presetName: String) {
-        viewModelScope.launch {
-            val limits = Categories.LIFESTYLE_PRESETS[presetName] ?: return@launch
-            limits.forEach { (name, limit) ->
-                repo.updateCategoryLimit(name, limit)
-            }
             refreshCategories()
         }
     }

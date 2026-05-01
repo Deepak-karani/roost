@@ -58,7 +58,7 @@ class DragonBudgetRepository(private val db: DragonBudgetDatabase) {
             categories.add(
                 BudgetCategoryWithSpent(
                     name = cat,
-                    weeklyLimit = budgetCat?.weeklyLimit ?: Categories.DEFAULT_LIMITS[cat] ?: 50.0,
+                    weeklyLimit = budgetCat?.weeklyLimit ?: 0.0,
                     iconEmoji = budgetCat?.iconEmoji ?: Categories.EMOJIS[cat] ?: "📦",
                     spentAmount = spent
                 )
@@ -97,7 +97,7 @@ class DragonBudgetRepository(private val db: DragonBudgetDatabase) {
             val defaults = Categories.ALL.map { name ->
                 BudgetCategory(
                     name = name,
-                    weeklyLimit = Categories.DEFAULT_LIMITS[name] ?: 50.0,
+                    weeklyLimit = 0.0,
                     iconEmoji = Categories.EMOJIS[name] ?: "📦"
                 )
             }

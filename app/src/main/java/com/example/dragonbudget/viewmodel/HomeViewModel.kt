@@ -26,16 +26,41 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val _topCategory = MutableStateFlow<BudgetCategoryWithSpent?>(null)
     val topCategory: StateFlow<BudgetCategoryWithSpent?> = _topCategory
 
+    /**
+     * Fraction of the weekly budget still unspent. 1f = none spent yet,
+     * 0f = exactly on budget, negative = over budget. If no budget is
+     * configured, returns 1f so the dragon doesn't fake-sleep.
+     */
+    val moneyLeftRatio: StateFlow<Float> = combine(
+        _totalSpentThisWeek, _totalBudgetThisWeek
+    ) { spent, budget ->
+        if (budget <= 0.0) 1f
+        else ((budget - spent) / budget).toFloat()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1f)
+
     init {
         viewModelScope.launch {
             repo.seedIfNeeded()
             refreshBudgetTotals()
         }
-        // Refresh when purchases change
+        // Refresh when purchases or category limits change so the home
+        // screen totals stay in sync with edits made on the Budget screen.
         viewModelScope.launch {
-            repo.getAllPurchases().collect {
+            combine(
+                repo.getAllPurchases(),
+                repo.getAllCategories()
+            ) { _, _ -> Unit }.collect {
                 refreshBudgetTotals()
             }
+        }
+    }
+
+    fun renameDragon(newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            val current = repo.getDragonStateOnce()
+            repo.updateDragonState(current.copy(name = trimmed))
         }
     }
 

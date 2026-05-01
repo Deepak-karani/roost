@@ -45,7 +45,7 @@ interface ReceiptVisionEngine {
 class LiteRtGemmaEngine(private val liteRTLMManager: com.example.qnn_litertlm_gemma.LiteRTLMManager) : LocalLLMEngine {
     override suspend fun generateBudgetAdvice(prompt: String): String {
         if (!liteRTLMManager.isEngineReady()) {
-            return "SnapDragon's brain is still waking up (Engine not initialized). Please wait a moment or check if the model file is in your Downloads folder."
+            return "Your dragon's brain is still waking up (Engine not initialized). Please wait a moment or check if the model file is in your Downloads folder."
         }
         return try {
             val response = StringBuilder()
@@ -55,7 +55,7 @@ class LiteRtGemmaEngine(private val liteRTLMManager: com.example.qnn_litertlm_ge
             }
             response.toString()
         } catch (e: Exception) {
-            "SnapDragon encountered an error: ${e.message}"
+            "Your dragon encountered an error: ${e.message}"
         }
     }
 }
@@ -87,40 +87,41 @@ class MLKitReceiptVisionEngine(
      * 2. Boost contrast (makes faded text from fold creases readable)
      * 3. Sharpen edges (helps with blurry text from camera shake)
      */
-    private suspend fun preprocessImage(imageUri: Uri): Bitmap = withContext(Dispatchers.Default) {
-        val inputStream = context.contentResolver.openInputStream(imageUri)
-        val original = BitmapFactory.decodeStream(inputStream)
-        inputStream?.close()
+    private suspend fun preprocessImage(imageUri: Uri): Bitmap? = withContext(Dispatchers.Default) {
+        try {
+            val inputStream = context.contentResolver.openInputStream(imageUri) ?: return@withContext null
+            val original = BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
 
-        val width = original.width
-        val height = original.height
+            if (original == null) return@withContext null
 
-        val enhanced = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(enhanced)
-        val paint = Paint()
+            val width = original.width
+            val height = original.height
 
-        // Grayscale + high contrast color matrix
-        // This dramatically improves OCR on:
-        //  - Folded receipts (shadows become less prominent)
-        //  - Faded thermal paper (text gets darker)
-        //  - Messy/stained receipts (color noise removed)
-        val contrast = 1.8f  // Boost contrast
-        val translate = (-(128f * contrast) + 128f)
+            val enhanced = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(enhanced)
+            val paint = Paint()
 
-        val colorMatrix = ColorMatrix(floatArrayOf(
-            // Grayscale conversion (luminance weights) + contrast boost
-            0.299f * contrast, 0.587f * contrast, 0.114f * contrast, 0f, translate,
-            0.299f * contrast, 0.587f * contrast, 0.114f * contrast, 0f, translate,
-            0.299f * contrast, 0.587f * contrast, 0.114f * contrast, 0f, translate,
-            0f, 0f, 0f, 1f, 0f
-        ))
+            val contrast = 1.8f
+            val translate = (-(128f * contrast) + 128f)
 
-        paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
-        canvas.drawBitmap(original, 0f, 0f, paint)
-        original.recycle()
+            val colorMatrix = ColorMatrix(floatArrayOf(
+                0.299f * contrast, 0.587f * contrast, 0.114f * contrast, 0f, translate,
+                0.299f * contrast, 0.587f * contrast, 0.114f * contrast, 0f, translate,
+                0.299f * contrast, 0.587f * contrast, 0.114f * contrast, 0f, translate,
+                0f, 0f, 0f, 1f, 0f
+            ))
 
-        Log.d("VisionEngine", "Preprocessed image: ${width}x${height}, contrast=1.8x")
-        enhanced
+            paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
+            canvas.drawBitmap(original, 0f, 0f, paint)
+            original.recycle()
+
+            Log.d("VisionEngine", "Preprocessed image: ${width}x${height}, contrast=1.8x")
+            enhanced
+        } catch (e: Exception) {
+            Log.e("VisionEngine", "Preprocessing failed: ${e.message}")
+            null
+        }
     }
 
     override suspend fun extractReceiptItems(imageUri: Uri): ReceiptScanResult {
@@ -387,36 +388,8 @@ class MLKitReceiptVisionEngine(
     }
 
     /**
-     * Known store names for fuzzy matching against OCR text.
-     * OCR often garbles logos, so we scan the ENTIRE receipt for these.
-     */
-    private val knownStores = listOf(
-        "Trader Joe's", "Trader Joes", "Whole Foods", "Walmart", "Target",
-        "Costco", "Kroger", "Safeway", "Albertsons", "Publix", "Aldi",
-        "Wegmans", "H-E-B", "HEB", "Meijer", "WinCo", "Food Lion",
-        "Stop & Shop", "Giant", "ShopRite", "Sprouts", "Fresh Market",
-        "Sam's Club", "BJ's", "Ralph's", "Ralphs", "Vons", "Pavilions",
-        "Harris Teeter", "Piggly Wiggly", "Hy-Vee", "Food 4 Less",
-        "Dollar Tree", "Dollar General", "Family Dollar", "Five Below",
-        "CVS", "Walgreens", "Rite Aid", "7-Eleven", "7 Eleven",
-        "Starbucks", "Dunkin", "McDonald's", "McDonalds", "Subway",
-        "Chipotle", "Chick-fil-A", "Wendy's", "Wendys", "Taco Bell",
-        "Burger King", "Panda Express", "In-N-Out", "Five Guys",
-        "Panera", "Jimmy John's", "Jimmy Johns", "Domino's", "Dominos",
-        "Papa John's", "Papa Johns", "Pizza Hut", "Little Caesars",
-        "Popeyes", "KFC", "Arby's", "Arbys", "Jack in the Box",
-        "Home Depot", "Lowe's", "Lowes", "Menards", "Ace Hardware",
-        "Best Buy", "Apple Store", "Amazon", "Nordstrom", "Macy's", "Macys",
-        "TJ Maxx", "Marshalls", "Ross", "Old Navy", "Gap", "Nike",
-        "Bath & Body Works", "Sephora", "Ulta", "GameStop",
-        "Shell", "Chevron", "BP", "ExxonMobil", "Mobil", "Texaco",
-        "76", "Circle K", "Wawa", "QuikTrip", "Sheetz", "RaceTrac",
-        "Trader Joe", "TRADER JOE", "TJ", "WF Market", "Whole Fds"
-    )
-
-    /**
      * Extract merchant by prioritizing the very first clean line at the top,
-     * then scanning for known store names, then falling back to smart scoring.
+     * then falling back to smart scoring of the first 10 lines.
      */
     private fun extractMerchant(lines: List<String>): String {
         // Step 1: Immediate priority - check the first 3 lines for a "very clean" name
@@ -440,24 +413,7 @@ class MLKitReceiptVisionEngine(
             }
         }
 
-        val fullText = lines.joinToString(" ")
-        val fullLower = fullText.lowercase()
-
-        // Step 2: Check for known store names anywhere in the receipt
-        for (store in knownStores) {
-            if (fullLower.contains(store.lowercase())) {
-                Log.d("VisionEngine", "Matched known store: $store")
-                return when {
-                    store.lowercase().contains("trader joe") -> "Trader Joe's"
-                    store.lowercase().contains("whole f") || store.lowercase().contains("wf market") -> "Whole Foods"
-                    store.lowercase().contains("mcdonalds") -> "McDonald's"
-                    store.lowercase().contains("wendys") -> "Wendy's"
-                    else -> store
-                }
-            }
-        }
-
-        // Step 3: Look for the best candidate line in the first 10 lines (Smart Scoring)
+        // Step 2: Look for the best candidate line in the first 10 lines (Smart Scoring)
         val candidates = mutableListOf<Pair<String, Int>>()
         for ((index, line) in lines.take(10).withIndex()) {
             val cleaned = line.trim()

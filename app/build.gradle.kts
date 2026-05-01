@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace = "com.example.dragonbudget"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.dragonbudget"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -32,11 +32,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
@@ -46,12 +46,30 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
-        }
-    }
-
-    sourceSets {
-        getByName("main") {
-            jniLibs.srcDirs("../litert_npu_runtime_libraries/qualcomm_runtime_v79")
+            // LiteRT-LM 0.11+ bundles its own copies of the LiteRT + Qualcomm
+            // dispatch native libs, which collide with the older standalone
+            // litert and qnn-litert-delegate AARs. Prefer the first match —
+            // project jniLibs (our patched libLiteRtDispatch_Qualcomm.so) win,
+            // and otherwise the LiteRT-LM-bundled copies are used.
+            pickFirsts += setOf(
+                "**/libLiteRt.so",
+                "**/libLiteRtClGlAccelerator.so",
+                "**/libLiteRtGpuAccelerator.so",
+                "**/libLiteRtOpenClAccelerator.so",
+                "**/libLiteRtWebGpuAccelerator.so",
+                "**/libLiteRtTopKOpenClSampler.so",
+                "**/libLiteRtTopKWebGpuSampler.so",
+                "**/libLiteRtDispatch_Qualcomm.so",
+                "**/libGemmaModelConstraintProvider.so",
+                "**/libQnnHtp.so",
+                "**/libQnnHtpPrepare.so",
+                "**/libQnnHtpV79Skel.so",
+                "**/libQnnHtpV79Stub.so",
+                "**/libQnnSystem.so",
+                "**/libQnnTFLiteDelegate.so",
+                "**/libqnn_delegate_jni.so",
+                "**/liblitertlm_jni.so"
+            )
         }
     }
 }
@@ -97,10 +115,6 @@ dependencies {
     // Standard LiteRT for Embeddings
     implementation(libs.litert.core)
 
-    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1") {
-        exclude(group = "org.tensorflow", module = "tensorflow-lite")
-        exclude(group = "org.tensorflow", module = "tensorflow-lite-api")
-    }
     implementation("com.qualcomm.qti:qnn-litert-delegate:2.44.0")
 
     // Coroutines + Lifecycle

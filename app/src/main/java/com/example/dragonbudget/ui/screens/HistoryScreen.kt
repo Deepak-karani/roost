@@ -14,15 +14,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.dragonbudget.AppContainer
 import com.example.dragonbudget.data.*
+import com.example.dragonbudget.ui.components.SoftCard
 import com.example.dragonbudget.ui.theme.*
 import com.example.dragonbudget.viewmodel.HistoryViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -38,144 +43,116 @@ fun HistoryScreen(
     val totalSpent by viewModel.totalSpent.collectAsState()
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Purchase History") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
-                actions = {
-                    var showConfirm by remember { mutableStateOf(false) }
-                    IconButton(onClick = { showConfirm = true }) {
-                        Icon(Icons.Default.DeleteSweep, "Clear History", tint = HealthRed)
-                    }
-                    if (showConfirm) {
-                        AlertDialog(
-                            onDismissRequest = { showConfirm = false },
-                            title = { Text("Clear All History?") },
-                            text = { Text("This will delete all transactions and reset your dragon's health. This cannot be undone.") },
-                            confirmButton = {
-                                Button(onClick = { viewModel.clearAll(); showConfirm = false }, colors = ButtonDefaults.buttonColors(containerColor = HealthRed)) {
-                                    Text("Clear All", color = Color.White)
-                                }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showConfirm = false }) { Text("Cancel") }
-                            }
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = DragonDark,
-                    titleContentColor = TextPrimary
-                )
-            )
-        },
-        containerColor = DragonDark
+        containerColor = DragonBackground
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp)
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            contentPadding = PaddingValues(top = 24.dp, bottom = 40.dp)
         ) {
-            // Summary card
+            // ── Title with Back Button ──
             item {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(DragonCard, RoundedCornerShape(20.dp))
-                        .padding(20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("Total Spent", color = TextSecondary, fontSize = 12.sp)
-                        Text(
-                            "\$${String.format("%.2f", totalSpent)}",
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = ElectricBlue
-                        )
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            "${purchases.size}",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text("purchases", color = TextMuted, fontSize = 11.sp)
-                    }
-                }
-            }
-
-            // Category filters
-            item {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    FilterChip(
-                        selected = selectedCategory == null,
-                        onClick = { viewModel.filterByCategory(null) },
-                        label = { Text("All", fontSize = 12.sp) },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = ElectricBlue.copy(alpha = 0.2f),
-                            selectedLabelColor = ElectricBlue,
-                            containerColor = DragonCard,
-                            labelColor = TextSecondary
-                        )
+                    Text(
+                        text = "HISTORY",
+                        style = DragonTypography.headlineLarge,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center
                     )
-                    Categories.ALL.forEach { cat ->
-                        FilterChip(
-                            selected = selectedCategory == cat,
-                            onClick = {
-                                viewModel.filterByCategory(
-                                    if (selectedCategory == cat) null else cat
-                                )
-                            },
-                            label = {
-                                Text(
-                                    "${Categories.EMOJIS[cat] ?: ""} $cat",
-                                    fontSize = 12.sp
-                                )
-                            },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = ElectricBlue.copy(alpha = 0.2f),
-                                selectedLabelColor = ElectricBlue,
-                                containerColor = DragonCard,
-                                labelColor = TextSecondary
-                            )
-                        )
-                    }
+                    Spacer(Modifier.width(48.dp)) // Balance the back button
                 }
             }
 
-            // Purchase list
-            if (purchases.isEmpty()) {
-                item {
+            // ── Summary Card ──
+            item {
+                SoftCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(DragonCard, RoundedCornerShape(16.dp))
-                            .padding(32.dp),
+                        modifier = Modifier.padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("No purchases found.", color = TextSecondary, fontSize = 14.sp)
+                        Text(
+                            "Total Spent",
+                            style = DragonTypography.headlineMedium,
+                            fontSize = 22.sp
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "\$${String.format("%.2f", totalSpent)}",
+                            style = DragonTypography.headlineLarge,
+                            fontSize = 48.sp,
+                            color = HealthRed
+                        )
                     }
+                }
+            }
+
+            // ── Category Filters ──
+            item {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SoftFilterChip(
+                        label = "All",
+                        selected = selectedCategory == null,
+                        onClick = { viewModel.filterByCategory(null) }
+                    )
+                    Categories.ALL.forEach { cat ->
+                        SoftFilterChip(
+                            label = "${Categories.EMOJIS[cat] ?: ""} $cat",
+                            selected = selectedCategory == cat,
+                            onClick = { viewModel.filterByCategory(if (selectedCategory == cat) null else cat) }
+                        )
+                    }
+                }
+            }
+
+            // ── Purchase List ──
+            if (purchases.isEmpty()) {
+                item {
+                    Text(
+                        "No purchases found.",
+                        modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+                        style = DragonTypography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                        color = TextMuted
+                    )
                 }
             }
 
             items(purchases) { purchase ->
-                PurchaseRow(purchase)
+                ActivityCard(purchase)
             }
         }
+    }
+}
+
+@Composable
+fun SoftFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    SoftCard(
+        cornerRadius = 12.dp,
+        backgroundColor = if (selected) AccentBeige else DragonSurface,
+        onClick = onClick
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = DragonTypography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (selected) Color.White else TextPrimary
+        )
     }
 }
