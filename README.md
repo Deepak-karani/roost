@@ -9,6 +9,21 @@ Google AI Edge x Qualcomm Hackathon 2026
 > Earlier name: *DragonBudget*. The app, the package, and most code identifiers
 > still use that name; *Roost* is the user-facing brand only.
 
+## 📲 Download
+
+**[⬇️ Download Roost v1.0 APK (106 MB)](https://github.com/Deepak-karani/roost/releases/download/v1.0/app-debug.apk)**
+
+Requires an Android device with a Snapdragon 8 Elite NPU (e.g. Galaxy S25 Ultra)
+for the on-device Gemma 4 model. After installing, push the model file:
+
+```sh
+adb push gemma-4-E2B-it.litertlm /sdcard/Android/data/com.example.dragonbudget/files/
+```
+
+The model file (~2.4 GB) is downloadable from
+[HuggingFace](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm).
+All other releases are listed [here](https://github.com/Deepak-karani/roost/releases).
+
 ---
 
 ## 🛠️ Building from source
