@@ -1,0 +1,141 @@
+package com.example.dragonbudget.viewmodel
+
+import android.net.Uri
+import android.util.Log
+import androidx.lifecycle.*
+import com.example.dragonbudget.AppContainer
+import com.example.dragonbudget.data.*
+import com.example.dragonbudget.engine.DragonStateEngine
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+
+class AddPurchaseViewModel(private val container: AppContainer) : ViewModel() {
+
+    private val repo = container.repository
+
+    private val _saved = MutableStateFlow(false)
+    val saved: StateFlow<Boolean> = _saved
+
+    // Single-item scan (legacy)
+    private val _scanResult = MutableStateFlow<PurchaseDraft?>(null)
+    val scanResult: StateFlow<PurchaseDraft?> = _scanResult
+
+    // Multi-item scan result
+    private val _receiptScan = MutableStateFlow<ReceiptScanResult?>(null)
+    val receiptScan: StateFlow<ReceiptScanResult?> = _receiptScan
+
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning: StateFlow<Boolean> = _isScanning
+
+    private val _scanError = MutableStateFlow<String?>(null)
+    val scanError: StateFlow<String?> = _scanError
+
+    fun savePurchase(merchant: String, amount: Double, category: String, note: String) {
+        viewModelScope.launch {
+            val purchase = Purchase(
+                merchant = merchant,
+                amount = amount,
+                category = category,
+                note = note
+            )
+            repo.addPurchase(purchase)
+
+            val cats = repo.getCategoriesWithSpent()
+            val catInfo = cats.find { it.name == category }
+            val percentUsed = catInfo?.percentUsed ?: 0f
+
+            val currentDragon = repo.getDragonStateOnce()
+            val updatedDragon = DragonStateEngine.onPurchase(currentDragon, category, percentUsed)
+            repo.updateDragonState(updatedDragon)
+
+            _saved.value = true
+        }
+    }
+
+    /**
+     * Save ALL selected items from a receipt scan as individual purchases.
+     */
+    fun saveAllScannedItems(merchant: String, items: List<ReceiptLineItem>) {
+        viewModelScope.launch {
+            val selectedItems = items.filter { it.selected }
+            if (selectedItems.isEmpty()) return@launch
+
+            for (item in selectedItems) {
+                val purchase = Purchase(
+                    merchant = merchant,
+                    amount = item.price,
+                    category = item.suggestedCategory,
+                    note = item.itemName
+                )
+                repo.addPurchase(purchase)
+            }
+
+            // Update dragon state once for all items
+            val cats = repo.getCategoriesWithSpent()
+            val mainCategory = selectedItems.groupBy { it.suggestedCategory }
+                .maxByOrNull { it.value.size }?.key ?: "Other"
+            val catInfo = cats.find { it.name == mainCategory }
+            val percentUsed = catInfo?.percentUsed ?: 0f
+
+            val currentDragon = repo.getDragonStateOnce()
+            val updatedDragon = DragonStateEngine.onPurchase(currentDragon, mainCategory, percentUsed)
+            repo.updateDragonState(updatedDragon)
+
+            _saved.value = true
+        }
+    }
+
+    /**
+     * Toggle selection of a scanned line item.
+     */
+    fun toggleItemSelection(index: Int) {
+        val current = _receiptScan.value ?: return
+        val updatedItems = current.items.toMutableList()
+        if (index in updatedItems.indices) {
+            val item = updatedItems[index]
+            updatedItems[index] = item.copy(selected = !item.selected)
+            _receiptScan.value = current.copy(items = updatedItems)
+        }
+    }
+
+    fun scanReceipt(uri: Uri) {
+        viewModelScope.launch {
+            _isScanning.value = true
+            _scanError.value = null
+            _scanResult.value = null
+            _receiptScan.value = null
+            try {
+                Log.d("AddPurchaseVM", "Starting multi-item receipt scan for URI: $uri")
+                val result = container.visionEngine.extractReceiptItems(uri)
+                Log.d("AddPurchaseVM", "Scan result: merchant=${result.merchant}, ${result.items.size} items, total=${result.total}")
+
+                _receiptScan.value = result
+
+                if (result.items.isEmpty() && result.total > 0) {
+                    // No individual items found, but got a total — create single item
+                    _scanResult.value = PurchaseDraft(
+                        merchant = result.merchant,
+                        amount = result.total,
+                        suggestedCategory = "Other",
+                        confidence = result.confidence
+                    )
+                    _scanError.value = "Could not detect individual items. Total detected: \$${String.format("%.2f", result.total)}"
+                } else if (result.items.isEmpty()) {
+                    _scanError.value = "Could not detect any items or prices on the receipt."
+                }
+            } catch (e: Exception) {
+                Log.e("AddPurchaseVM", "Scan failed", e)
+                _scanError.value = "Scan failed: ${e.message}"
+            } finally {
+                _isScanning.value = false
+            }
+        }
+    }
+
+    class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            return AddPurchaseViewModel(container) as T
+        }
+    }
+}

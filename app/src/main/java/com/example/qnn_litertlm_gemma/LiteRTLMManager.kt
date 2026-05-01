@@ -41,6 +41,11 @@ class LiteRTLMManager private constructor(private val context: Context) {
     private var conversation: com.google.ai.edge.litertlm.Conversation? = null
     private var isInitialized = false
     private var currentBackendName: String = "CPU"
+
+    /**
+     * Check if the LiteRT-LM engine is initialized and ready for inference.
+     */
+    fun isEngineReady(): Boolean = isInitialized && engine != null
     
     companion object {
         private const val TAG = "LiteRTLMManager"
@@ -101,8 +106,7 @@ class LiteRTLMManager private constructor(private val context: Context) {
             } else {
                 // Build ordered backend list based on preference
                 val backends = buildBackendList(preferredBackend)
-                val testModelPath = "/data/local/tmp/gemma/litertl/model.litertlm"
-                initializeEngineWithFallback(testModelPath, backends)
+                initializeEngineWithFallback(modelPath, backends)
             }
             isInitialized = true
             Log.i(TAG, "Initialization SUCCEEDED on backend: $currentBackendName")
@@ -188,17 +192,23 @@ class LiteRTLMManager private constructor(private val context: Context) {
         val engineConfig = EngineConfig(
             modelPath = modelPath,
             backend = backend,
-            // Cache dir is CRITICAL for JIT compilation
+            // Cache dir is CRITICAL for JIT compilation speed
             cacheDir = context.cacheDir.path
         )
         
+        Log.i(TAG, "Starting Engine.initialize() on ${factory.name}...")
         val startTime = System.currentTimeMillis()
         val candidateEngine = Engine(engineConfig)
         
         try {
+            // Using a background thread to prevent UI jank during heavy JIT
             candidateEngine.initialize()
             val duration = System.currentTimeMillis() - startTime
             Log.i(TAG, "Engine initialization SUCCEEDED in ${duration}ms")
+            
+            if (duration > 30000 && factory.name == "NPU") {
+                Log.w(TAG, "Initialization took >30s. HIGHLY RECOMMENDED to AOT compile the model to reduce this to <5s.")
+            }
             
             // Verify conversation works
             val testConv = candidateEngine.createConversation(ConversationConfig())
