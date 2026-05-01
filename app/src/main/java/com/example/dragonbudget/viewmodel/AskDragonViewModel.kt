@@ -46,9 +46,10 @@ class AskDragonViewModel(private val container: AppContainer) : ViewModel() {
             try {
                 val dragon = repo.getDragonStateOnce()
                 val categories = repo.getCategoriesWithSpent()
+                val overall = repo.getSettingsOnce().overallWeeklyBudget
 
                 // Build the prompt
-                val prompt = PromptBuilder.buildAdvicePrompt(dragon, categories, question)
+                val prompt = PromptBuilder.buildAdvicePrompt(dragon, categories, question, overall)
 
                 // Generate response via LiteRT-LM Gemma on NPU
                 val answer = container.llmEngine.generateBudgetAdvice(prompt)

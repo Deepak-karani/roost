@@ -1,10 +1,48 @@
-# 🐉 DragonBudget
+# 🐉 Roost
 
-> **Grow your SnapDragon by spending wisely.**  
+> **Grow your dragon by spending wisely.**
 > An offline, on-device budgeting game powered by Qualcomm Snapdragon NPU + Google LiteRT-LM.
 
-**Track 1: LLM Based Consumer Use Journeys**  
+**Track 1: LLM Based Consumer Use Journeys**
 Google AI Edge x Qualcomm Hackathon 2026
+
+> Earlier name: *DragonBudget*. The app, the package, and most code identifiers
+> still use that name; *Roost* is the user-facing brand only.
+
+---
+
+## 🛠️ Building from source
+
+This repo deliberately does **not** ship the Qualcomm Snapdragon NPU native
+libraries — they're 80+ MB each and come from the Qualcomm QNN SDK. To build
+the APK locally:
+
+1. Install the Qualcomm QNN SDK and the LiteRT-LM AAR.
+2. Drop the following `.so` files into `app/src/main/jniLibs/arm64-v8a/`:
+   - `libLiteRt.so`
+   - `libLiteRtDispatch_Qualcomm.so` *(must be patched — see below)*
+   - `libLiteRtGpuAccelerator.so`
+   - `libLiteRtOpenClAccelerator.so`
+   - `libLiteRtTopKOpenClSampler.so`, `libLiteRtTopKWebGpuSampler.so`, `libLiteRtWebGpuAccelerator.so`
+   - `libGemmaModelConstraintProvider.so`
+   - `libQnnHtp.so`, `libQnnHtpPrepare.so`, `libQnnHtpV79Skel.so`, `libQnnHtpV79Stub.so`, `libQnnSystem.so`
+3. The dispatch lib needs a one-time `patchelf` patch so it can find symbols
+   from `libLiteRt.so` at dlopen time:
+   ```sh
+   brew install patchelf  # or apt install patchelf
+   patchelf --add-needed libLiteRt.so app/src/main/jniLibs/arm64-v8a/libLiteRtDispatch_Qualcomm.so
+   ```
+4. Download the Gemma 4 E2B universal LiteRT-LM model from HuggingFace and push it to the device:
+   ```sh
+   curl -L -o gemma-4-E2B-it.litertlm \
+     "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
+   adb push gemma-4-E2B-it.litertlm /sdcard/Android/data/com.example.dragonbudget/files/
+   ```
+5. Build with JDK 17 (`JAVA_HOME` pointing to a real JDK, not a JRE):
+   ```sh
+   ./gradlew :app:assembleDebug
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   ```
 
 ---
 

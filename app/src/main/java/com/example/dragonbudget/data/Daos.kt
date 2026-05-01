@@ -30,6 +30,9 @@ interface PurchaseDao {
     @Query("SELECT COALESCE(SUM(amount), 0.0) FROM purchases WHERE timestamp >= :since")
     suspend fun getTotalSpentSince(since: Long): Double
 
+    @Update
+    suspend fun update(purchase: Purchase)
+
     @Delete
     suspend fun delete(purchase: Purchase)
 
@@ -51,6 +54,12 @@ interface BudgetCategoryDao {
 
     @Query("SELECT * FROM budget_categories ORDER BY name")
     fun getAllCategories(): Flow<List<BudgetCategory>>
+
+    @Query("SELECT * FROM budget_categories ORDER BY name")
+    suspend fun getAllCategoriesOnce(): List<BudgetCategory>
+
+    @Delete
+    suspend fun delete(category: BudgetCategory)
 
     @Query("SELECT * FROM budget_categories WHERE name = :name")
     suspend fun getCategory(name: String): BudgetCategory?
@@ -76,6 +85,41 @@ interface DragonStateDao {
 
     @Query("UPDATE dragon_state SET health = :health, xp = :xp, level = :level, mood = :mood, lastUpdated = :lastUpdated, streakDays = :streakDays, lastLogDate = :lastLogDate WHERE id = 1")
     suspend fun updateState(health: Int, xp: Int, level: Int, mood: String, lastUpdated: Long, streakDays: Int, lastLogDate: String)
+}
+
+// ──────────────────────────────────────────────
+// App Settings DAO (singleton row)
+// ──────────────────────────────────────────────
+
+@Dao
+interface AppSettingsDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(settings: AppSettings)
+
+    @Query("SELECT * FROM app_settings WHERE id = 1")
+    fun get(): Flow<AppSettings?>
+
+    @Query("SELECT * FROM app_settings WHERE id = 1")
+    suspend fun getOnce(): AppSettings?
+}
+
+// ──────────────────────────────────────────────
+// Receipt Item DAO (archived line items per purchase)
+// ──────────────────────────────────────────────
+
+@Dao
+interface ReceiptItemDao {
+    @Insert
+    suspend fun insertAll(items: List<ReceiptItem>)
+
+    @Query("SELECT * FROM receipt_items WHERE purchaseId = :purchaseId ORDER BY id ASC")
+    fun getItemsForPurchase(purchaseId: Long): Flow<List<ReceiptItem>>
+
+    @Query("SELECT * FROM receipt_items WHERE purchaseId = :purchaseId ORDER BY id ASC")
+    suspend fun getItemsForPurchaseOnce(purchaseId: Long): List<ReceiptItem>
+
+    @Query("SELECT COUNT(*) FROM receipt_items WHERE purchaseId = :purchaseId")
+    suspend fun countForPurchase(purchaseId: Long): Int
 }
 
 // ──────────────────────────────────────────────

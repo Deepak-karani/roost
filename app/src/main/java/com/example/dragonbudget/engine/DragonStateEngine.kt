@@ -193,4 +193,85 @@ object DragonStateEngine {
             else -> getDragonDrawableForHealth(health)
         }
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  New named-frame system (the canonical path going forward).
+    //  Health is derived directly from remaining-budget percentage:
+    //    spending 0 % of budget   -> 100 % dragon health
+    //    spending 50 % of budget  -> 50 % dragon health
+    //    spending 100 %+ of budget -> 0 % dragon health
+    //  When no budget is configured, callers should pass health = 100 so the
+    //  dragon shows the calm-happy frame instead of being asleep by default.
+    // ──────────────────────────────────────────────────────────────────────
+
+    /** Compute dragon health from total weekly spend / total weekly budget. */
+    fun budgetHealth(totalSpent: Double, totalBudget: Double): Int {
+        if (totalBudget <= 0.0) return 100
+        val spentPercent = (totalSpent / totalBudget) * 100.0
+        val remainingBudgetPercent = (100.0 - spentPercent).coerceAtLeast(0.0)
+        return remainingBudgetPercent.toInt()
+    }
+
+    /**
+     * Pick the named frame for a given health value (0..100).
+     *
+     * The frames are anchored so the first frame "starts at 10%": frame 0
+     * is the floor that covers 0–19% (deep sleep stays visible even when
+     * the user is fully broke), then each subsequent 10% bracket bumps up
+     * one frame, ending at frame 9 for a perfect 100% week.
+     */
+    fun getDragonFrameForHealth(health: Int): DragonFrame {
+        return when (health.coerceIn(0, 100)) {
+            100        -> DragonFrame.FRAME_9_CALM_HAPPY
+            in 90..99  -> DragonFrame.FRAME_8_MONEY_HAPPY
+            in 80..89  -> DragonFrame.FRAME_7_MONEY_EXCITED
+            in 70..79  -> DragonFrame.FRAME_6_ALERT_HAPPY
+            in 60..69  -> DragonFrame.FRAME_5_HAPPY_SITTING
+            in 50..59  -> DragonFrame.FRAME_4_EXCITED
+            in 40..49  -> DragonFrame.FRAME_3_HAPPY
+            in 30..39  -> DragonFrame.FRAME_2_WAKING_UP
+            in 20..29  -> DragonFrame.FRAME_1_SLEEPING
+            else       -> DragonFrame.FRAME_0_SLEEPING_DEEP
+        }
+    }
+
+    fun dragonFrameToDrawable(frame: DragonFrame): Int = when (frame) {
+        DragonFrame.FRAME_0_SLEEPING_DEEP -> R.drawable.dragon_frame_0_sleeping_deep
+        DragonFrame.FRAME_1_SLEEPING      -> R.drawable.dragon_frame_1_sleeping
+        DragonFrame.FRAME_2_WAKING_UP     -> R.drawable.dragon_frame_2_waking_up
+        DragonFrame.FRAME_3_HAPPY         -> R.drawable.dragon_frame_3_happy
+        DragonFrame.FRAME_4_EXCITED       -> R.drawable.dragon_frame_4_excited
+        DragonFrame.FRAME_5_HAPPY_SITTING -> R.drawable.dragon_frame_5_happy_sitting
+        DragonFrame.FRAME_6_ALERT_HAPPY   -> R.drawable.dragon_frame_6_alert_happy
+        DragonFrame.FRAME_7_MONEY_EXCITED -> R.drawable.dragon_frame_7_money_excited
+        DragonFrame.FRAME_8_MONEY_HAPPY   -> R.drawable.dragon_frame_8_money_happy
+        DragonFrame.FRAME_9_CALM_HAPPY    -> R.drawable.dragon_frame_9_calm_happy
+    }
+
+    /** Mood label aligned to the same 10-bracket scheme as the frames. */
+    fun getMoodLabel(health: Int): String = when (health.coerceIn(0, 100)) {
+        100        -> "Calm and thriving"
+        in 90..99  -> "Happy"
+        in 80..89  -> "Excited"
+        in 70..79  -> "Alert but okay"
+        in 60..69  -> "Still good"
+        in 50..59  -> "Getting tired"
+        in 40..49  -> "Low energy"
+        in 30..39  -> "Waking / sleepy"
+        in 20..29  -> "Sleepy"
+        else       -> "Deep sleep"
+    }
+}
+
+enum class DragonFrame {
+    FRAME_0_SLEEPING_DEEP,
+    FRAME_1_SLEEPING,
+    FRAME_2_WAKING_UP,
+    FRAME_3_HAPPY,
+    FRAME_4_EXCITED,
+    FRAME_5_HAPPY_SITTING,
+    FRAME_6_ALERT_HAPPY,
+    FRAME_7_MONEY_EXCITED,
+    FRAME_8_MONEY_HAPPY,
+    FRAME_9_CALM_HAPPY
 }

@@ -153,8 +153,11 @@ fun AskDragonScreen(
             // ── Small Dragon in Corner (mirrors health + money-left) ──
             Image(
                 painter = painterResource(
-                    id = com.example.dragonbudget.engine.DragonStateEngine
-                        .getDragonDrawable(dragonHealth, moneyLeftRatio)
+                    id = com.example.dragonbudget.engine.DragonStateEngine.dragonFrameToDrawable(
+                        com.example.dragonbudget.engine.DragonStateEngine.getDragonFrameForHealth(
+                            (moneyLeftRatio.coerceIn(0f, 1f) * 100).toInt()
+                        )
+                    )
                 ),
                 contentDescription = null,
                 modifier = Modifier

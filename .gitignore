@@ -17,6 +17,16 @@ local.properties
 *.litertlm
 *.bin
 
+# Qualcomm Snapdragon NPU + LiteRT-LM native libraries.
+# The .so files (some up to 82 MB) are from the Qualcomm QNN SDK and are
+# too large for GitHub. Anyone cloning this repo and wanting to build for
+# Snapdragon NPU needs to drop these in app/src/main/jniLibs/arm64-v8a/
+# from their own SDK install.
+app/src/main/jniLibs/
+
+# Custom local backups
+*.bak
+
 # Temporary and Large Files
 .venv/
 .venv_wsl/

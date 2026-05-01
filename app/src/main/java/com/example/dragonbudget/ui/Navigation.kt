@@ -3,9 +3,11 @@ package com.example.dragonbudget.ui
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.dragonbudget.ui.screens.*
 
 object Routes {
@@ -14,6 +16,9 @@ object Routes {
     const val BUDGETS = "budgets"
     const val ASK_DRAGON = "ask_dragon"
     const val HISTORY = "history"
+    const val RECEIPT_DETAILS = "receipt_details/{purchaseId}"
+
+    fun receiptDetails(purchaseId: Long) = "receipt_details/$purchaseId"
 }
 
 @Composable
@@ -78,6 +83,20 @@ fun DragonBudgetNavHost(appContainer: com.example.dragonbudget.AppContainer) {
         composable(Routes.HISTORY) {
             HistoryScreen(
                 appContainer = appContainer,
+                onBack = { navController.popBackStack() },
+                onPurchaseClick = { id ->
+                    navController.navigate(Routes.receiptDetails(id))
+                }
+            )
+        }
+        composable(
+            Routes.RECEIPT_DETAILS,
+            arguments = listOf(navArgument("purchaseId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getLong("purchaseId") ?: return@composable
+            ReceiptDetailsScreen(
+                appContainer = appContainer,
+                purchaseId = id,
                 onBack = { navController.popBackStack() }
             )
         }

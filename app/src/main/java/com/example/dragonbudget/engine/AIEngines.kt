@@ -66,7 +66,8 @@ class LiteRtGemmaEngine(private val liteRTLMManager: com.example.qnn_litertlm_ge
 
 class MLKitReceiptVisionEngine(
     private val context: Context,
-    private val liteRTLMManager: com.example.qnn_litertlm_gemma.LiteRTLMManager
+    private val liteRTLMManager: com.example.qnn_litertlm_gemma.LiteRTLMManager,
+    private val repository: com.example.dragonbudget.data.DragonBudgetRepository
 ) : ReceiptVisionEngine {
 
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.Builder().build())
@@ -174,16 +175,23 @@ class MLKitReceiptVisionEngine(
         // Try Gemma-based parsing first (if engine is ready)
         if (liteRTLMManager.isEngineReady()) {
             try {
-                val prompt = PromptBuilder.buildOCRParsePrompt(rawText)
+                val userCats = repository.getCategoriesWithSpent().map { it.name }
+                val prompt = PromptBuilder.buildOCRParsePrompt(rawText, userCats)
                 val response = StringBuilder()
                 liteRTLMManager.startConversation()
                 liteRTLMManager.sendMessage(prompt).collect { chunk ->
                     response.append(chunk)
                 }
                 val parsed = parseGemmaResponse(response.toString())
+                Log.d("VisionEngine", "Gemma raw response (${response.length} chars):\n${response.toString().take(3000)}")
                 if (parsed != null && parsed.items.isNotEmpty()) {
-                    Log.d("VisionEngine", "Gemma parsed: ${parsed.items.size} items")
+                    Log.d("VisionEngine", "Gemma parsed ${parsed.items.size} items, total=\$${parsed.total}, tip=\$${parsed.tip}, svc=\$${parsed.serviceCharge}")
+                    parsed.items.forEachIndexed { i, item ->
+                        Log.d("VisionEngine", "  [$i] '${item.itemName}' -> \$${item.price} (${item.suggestedCategory})")
+                    }
                     return parsed
+                } else {
+                    Log.d("VisionEngine", "Gemma returned 0 items")
                 }
             } catch (e: Exception) {
                 Log.w("VisionEngine", "Gemma parsing failed: ${e.message}")
@@ -196,22 +204,17 @@ class MLKitReceiptVisionEngine(
 
     private fun parseGemmaResponse(response: String): ReceiptScanResult? {
         return try {
-            // Find the main JSON block
             val jsonStr = Regex("""\{[\s\S]*\}""").find(response)?.value ?: return null
-            
-            // Extract merchant
+
             val merchant = Regex(""""merchant"\s*:\s*"([^"]+)"""").find(jsonStr)?.groupValues?.get(1) ?: "Unknown"
-            
-            // Extract total
             val total = Regex(""""total"\s*:\s*(\d+\.?\d*)""").find(jsonStr)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
-            
-            // Extract items array content
+            val tip = Regex(""""tip"\s*:\s*(\d+\.?\d*)""").find(jsonStr)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+            val serviceCharge = Regex(""""service_charge"\s*:\s*(\d+\.?\d*)""").find(jsonStr)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+
             val itemsMatch = Regex(""""items"\s*:\s*\[([\s\S]*?)\]""").find(jsonStr)
             val itemsList = mutableListOf<ReceiptLineItem>()
-            
             if (itemsMatch != null) {
                 val itemsArrayStr = itemsMatch.groupValues[1]
-                // Match each item object: {"name": "...", "price": 0.00, "category": "..."}
                 val itemRegex = Regex("""\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"price"\s*:\s*(\d+\.?\d*)\s*,\s*"category"\s*:\s*"([^"]+)"\s*\}""")
                 itemRegex.findAll(itemsArrayStr).forEach { match ->
                     val name = match.groupValues[1]
@@ -227,8 +230,10 @@ class MLKitReceiptVisionEngine(
                 ReceiptScanResult(
                     merchant = merchant,
                     items = if (itemsList.isNotEmpty()) itemsList else listOf(ReceiptLineItem("Total", total, "Other")),
-                    total = if (total > 0) total else itemsList.sumOf { it.price },
-                    confidence = 0.95f
+                    total = if (total > 0) total else itemsList.sumOf { it.price } + tip + serviceCharge,
+                    confidence = 0.95f,
+                    tip = tip,
+                    serviceCharge = serviceCharge
                 )
             } else null
         } catch (e: Exception) {
@@ -275,6 +280,28 @@ class MLKitReceiptVisionEngine(
             }
         }
 
+        // Detect tip and service charge (added on top of items, not part of items)
+        var tip = 0.0
+        var serviceCharge = 0.0
+        val tipPatterns = listOf(
+            Regex("""(?i)\b(?:tip|gratuity)\s*:?\s*\$?\s*(\d{1,5}\.\d{2})"""),
+        )
+        val servicePatterns = listOf(
+            Regex("""(?i)\bservice\s*(?:charge|fee)\s*:?\s*\$?\s*(\d{1,5}\.\d{2})"""),
+            Regex("""(?i)\bauto[\s\-]?gratuity\s*:?\s*\$?\s*(\d{1,5}\.\d{2})"""),
+            Regex("""(?i)\bsvc\s*(?:fee|chg|charge)?\s*:?\s*\$?\s*(\d{1,5}\.\d{2})"""),
+        )
+        for (line in lines) {
+            tipPatterns.firstOrNull()?.find(line)?.groupValues?.get(1)?.toDoubleOrNull()?.let {
+                if (it > tip) tip = it
+            }
+            for (pat in servicePatterns) {
+                pat.find(line)?.groupValues?.get(1)?.toDoubleOrNull()?.let {
+                    if (it > serviceCharge) serviceCharge = it
+                }
+            }
+        }
+
         // ── Extract line items ──
         // Multiple patterns to handle different receipt formats
 
@@ -304,9 +331,9 @@ class MLKitReceiptVisionEngine(
             }
         }
 
-        // If no total found, sum the items
+        // If no total found, derive from items + tip + service
         if (totalAmount == 0.0 && items.isNotEmpty()) {
-            totalAmount = items.sumOf { it.price }
+            totalAmount = items.sumOf { it.price } + tip + serviceCharge
         }
 
         // Remove duplicate items (same name and price)
@@ -320,13 +347,15 @@ class MLKitReceiptVisionEngine(
             else -> 0.2f
         }
 
-        Log.d("VisionEngine", "RESULT: merchant='$merchant', ${uniqueItems.size} items, total=\$$totalAmount")
+        Log.d("VisionEngine", "RESULT: merchant='$merchant', ${uniqueItems.size} items, total=\$$totalAmount, tip=\$$tip, svc=\$$serviceCharge")
 
         return ReceiptScanResult(
             merchant = merchant,
             items = uniqueItems,
             total = totalAmount,
-            confidence = confidence
+            confidence = confidence,
+            tip = tip,
+            serviceCharge = serviceCharge
         )
     }
 
@@ -450,7 +479,11 @@ class MLKitReceiptVisionEngine(
     }
 
     /**
-     * Infer budget category from item name keywords.
+     * Infer a heuristic category for an OCR'd item name.
+     *
+     * Returns the most likely common-category name as a string. The viewmodel
+     * is responsible for re-mapping these onto the user's actual category
+     * set, since the user may not have a category called "Groceries".
      */
     private fun inferCategory(itemName: String): String {
         val lower = itemName.lowercase()
@@ -464,37 +497,37 @@ class MLKitReceiptVisionEngine(
                 "soda", "snack", "chip", "cracker", "cookie", "flour", "sugar", "salt",
                 "oil", "sauce", "soup", "bean", "deli", "ham", "turkey", "bacon", "sausage",
                 "cream", "ice cream", "candy", "chocolate", "gum", "nut", "almond", "peanut"
-            ).any { lower.contains(it) } -> Categories.GROCERIES
+            ).any { lower.contains(it) } -> "Groceries"
 
             listOf("coffee", "latte", "mocha", "espresso", "tea", "burger", "pizza", "taco",
                 "sandwich", "wrap", "salad", "meal", "combo", "drink", "fries", "wing", "sub",
                 "bowl", "plate", "entree", "appetizer", "dessert", "cake", "donut", "bagel",
                 "smoothie", "boba", "sushi", "ramen", "noodle", "curry", "kebab", "gyro",
                 "burrito", "quesadilla", "nachos"
-            ).any { lower.contains(it) } -> Categories.FOOD
+            ).any { lower.contains(it) } -> "Food"
 
             listOf("gas", "fuel", "diesel", "unleaded", "premium", "regular", "gallon"
-            ).any { lower.contains(it) } -> Categories.GAS
+            ).any { lower.contains(it) } -> "Gas"
 
             listOf("movie", "ticket", "game", "play", "show", "concert", "museum",
                 "netflix", "spotify", "subscription", "streaming", "arcade"
-            ).any { lower.contains(it) } -> Categories.ENTERTAINMENT
+            ).any { lower.contains(it) } -> "Entertainment"
 
             listOf("shirt", "pants", "shoe", "dress", "jacket", "clothes", "jeans",
                 "accessory", "watch", "bag", "purse", "electronics", "phone", "case",
                 "charger", "cable", "book", "toy", "gift"
-            ).any { lower.contains(it) } -> Categories.SHOPPING
+            ).any { lower.contains(it) } -> "Shopping"
 
             listOf("soap", "detergent", "cleaner", "towel", "tissue", "toilet", "paper",
                 "trash", "bag", "sponge", "broom", "mop", "bulb", "battery", "dish",
                 "laundry", "bleach", "wipe", "spray"
-            ).any { lower.contains(it) } -> Categories.HOUSEHOLD
+            ).any { lower.contains(it) } -> "Household"
 
             listOf("notebook", "pen", "pencil", "folder", "binder", "textbook",
                 "calculator", "tuition", "school", "class"
-            ).any { lower.contains(it) } -> Categories.SCHOOL
+            ).any { lower.contains(it) } -> "School"
 
-            else -> Categories.OTHER
+            else -> "Other"
         }
     }
 }

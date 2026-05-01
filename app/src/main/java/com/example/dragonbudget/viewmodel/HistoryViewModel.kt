@@ -2,6 +2,7 @@ package com.example.dragonbudget.viewmodel
 
 import androidx.lifecycle.*
 import com.example.dragonbudget.AppContainer
+import com.example.dragonbudget.data.BudgetCategory
 import com.example.dragonbudget.data.Purchase
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -24,8 +25,19 @@ class HistoryViewModel(private val container: AppContainer) : ViewModel() {
         list.sumOf { it.amount }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
+    val categories: StateFlow<List<BudgetCategory>> = repo.getAllCategories()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun filterByCategory(category: String?) {
         _selectedCategory.value = category
+    }
+
+    fun deletePurchase(purchase: Purchase) {
+        viewModelScope.launch { repo.deletePurchase(purchase) }
+    }
+
+    fun updatePurchase(purchase: Purchase) {
+        viewModelScope.launch { repo.updatePurchase(purchase) }
     }
 
     fun clearAll() {

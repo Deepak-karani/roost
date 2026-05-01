@@ -30,6 +30,10 @@ class AddPurchaseViewModel(private val container: AppContainer) : ViewModel() {
         else ((limit - cats.sumOf { it.spentAmount }) / limit).toFloat()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1f)
 
+    /** Live list of user-managed categories — the source of truth for dropdowns. */
+    val categories: StateFlow<List<BudgetCategory>> = repo.getAllCategories()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Single-item scan (legacy)
     private val _scanResult = MutableStateFlow<PurchaseDraft?>(null)
     val scanResult: StateFlow<PurchaseDraft?> = _scanResult
@@ -68,33 +72,53 @@ class AddPurchaseViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /**
-     * Save ALL selected items from a receipt scan as individual purchases.
+     * Save the scanned receipt as ONE Purchase row using the receipt total
+     * for the amount, and archive every line item as a ReceiptItem child
+     * for drill-in later. The Purchase's category is the most-common
+     * category across the items (falls back to "Other"). Budget math uses
+     * only the Purchase row's total — items are audit data only.
      */
     fun saveAllScannedItems(merchant: String, items: List<ReceiptLineItem>) {
         viewModelScope.launch {
-            val selectedItems = items.filter { it.selected }
-            if (selectedItems.isEmpty()) return@launch
-
-            for (item in selectedItems) {
-                val purchase = Purchase(
-                    merchant = merchant,
-                    amount = item.price,
-                    category = item.suggestedCategory,
-                    note = item.itemName
-                )
-                repo.addPurchase(purchase)
+            val scan = _receiptScan.value ?: return@launch
+            // Only save the items the user kept checked. Tip and service charge
+            // (if printed on the receipt) are added on top — they're real money
+            // that left the wallet, so budget math has to count them.
+            val kept = items.filter { it.selected }
+            val keptSum = kept.sumOf { it.price }
+            val extras = scan.tip + scan.serviceCharge
+            val totalToSave = when {
+                kept.isNotEmpty() -> keptSum + extras
+                scan.total > 0.0 -> scan.total
+                else -> return@launch
             }
+            if (totalToSave <= 0.0) return@launch
 
-            // Update dragon state once for all items
-            val cats = repo.getCategoriesWithSpent()
-            val mainCategory = selectedItems.groupBy { it.suggestedCategory }
+            // Pick the Purchase's overall category by majority among the kept items.
+            val mainCategory = kept.groupBy { it.suggestedCategory }
                 .maxByOrNull { it.value.size }?.key ?: "Other"
+
+            val noteParts = mutableListOf<String>()
+            if (kept.isNotEmpty()) noteParts += "${kept.size} items"
+            if (scan.tip > 0) noteParts += "tip $${String.format("%.2f", scan.tip)}"
+            if (scan.serviceCharge > 0) noteParts += "service $${String.format("%.2f", scan.serviceCharge)}"
+
+            val purchase = Purchase(
+                merchant = merchant.ifBlank { "Receipt" },
+                amount = totalToSave,
+                category = mainCategory,
+                note = noteParts.joinToString(" · ")
+            )
+            repo.addPurchaseWithItems(purchase, kept)
+
+            // Dragon updates against the chosen category + overall weekly ratio.
+            val cats = repo.getCategoriesWithSpent()
             val catInfo = cats.find { it.name == mainCategory }
             val percentUsed = catInfo?.percentUsed ?: 0f
-            val overallRatio = overallRatio(cats)
+            val overallRatioVal = overallRatio(cats)
 
             val currentDragon = repo.getDragonStateOnce()
-            val updatedDragon = DragonStateEngine.onPurchase(currentDragon, mainCategory, percentUsed, overallRatio)
+            val updatedDragon = DragonStateEngine.onPurchase(currentDragon, mainCategory, percentUsed, overallRatioVal)
             repo.updateDragonState(updatedDragon)
 
             _saved.value = true
@@ -135,17 +159,32 @@ class AddPurchaseViewModel(private val container: AppContainer) : ViewModel() {
             _receiptScan.value = null
             try {
                 Log.d("AddPurchaseVM", "Starting multi-item receipt scan for URI: $uri")
-                val result = container.visionEngine.extractReceiptItems(uri)
-                Log.d("AddPurchaseVM", "Scan result: merchant=${result.merchant}, ${result.items.size} items, total=${result.total}")
+                val raw = container.visionEngine.extractReceiptItems(uri)
+                Log.d("AddPurchaseVM", "Scan result: merchant=${raw.merchant}, ${raw.items.size} items, total=${raw.total}")
+
+                // Re-bucket every item's suggested category into one of the
+                // user's actual categories. The OCR engine guesses with a
+                // hardcoded keyword list (Groceries / Food / Gas / etc.); if
+                // the user only has "Food", we don't want to leave dangling
+                // "Groceries" categories that don't exist on their Budget screen.
+                val userCats = repo.getCategoriesWithSpent().map { it.name }
+                val fallback = userCats.firstOrNull() ?: Categories.FOOD
+                val result = raw.copy(
+                    items = raw.items.map { item ->
+                        val mapped = if (item.suggestedCategory in userCats) {
+                            item.suggestedCategory
+                        } else fallback
+                        item.copy(suggestedCategory = mapped)
+                    }
+                )
 
                 _receiptScan.value = result
 
                 if (result.items.isEmpty() && result.total > 0) {
-                    // No individual items found, but got a total — create single item
                     _scanResult.value = PurchaseDraft(
                         merchant = result.merchant,
                         amount = result.total,
-                        suggestedCategory = "Other",
+                        suggestedCategory = fallback,
                         confidence = result.confidence
                     )
                     _scanError.value = "Could not detect individual items. Total detected: \$${String.format("%.2f", result.total)}"

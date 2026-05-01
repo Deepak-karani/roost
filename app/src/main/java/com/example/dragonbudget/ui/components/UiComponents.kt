@@ -114,26 +114,31 @@ fun SoftProgressBar(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = "$label:",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Black,
-            color = TextPrimary,
-            modifier = Modifier.width(45.dp)
-        )
-        
+        // Only render the label slot when there's actually a label —
+        // otherwise we render an awkward stranded ":" or eat width
+        // unnecessarily on small phone screens.
+        if (label.isNotBlank()) {
+            Text(
+                text = label,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Black,
+                color = TextPrimary,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+        }
+
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(24.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .height(20.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(BarBackground)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(progress.coerceIn(0f, 1f))
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(HpColor)
             )
         }

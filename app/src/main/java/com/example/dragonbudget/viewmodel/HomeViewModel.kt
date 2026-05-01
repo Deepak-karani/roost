@@ -17,11 +17,25 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     val recentPurchases: StateFlow<List<Purchase>> = repo.getRecentPurchases(5)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allCategories: StateFlow<List<BudgetCategory>> = repo.getAllCategories()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _totalSpentThisWeek = MutableStateFlow(0.0)
     val totalSpentThisWeek: StateFlow<Double> = _totalSpentThisWeek
 
-    private val _totalBudgetThisWeek = MutableStateFlow(0.0)
-    val totalBudgetThisWeek: StateFlow<Double> = _totalBudgetThisWeek
+    /**
+     * Top-level weekly budget the user set on first launch (or via the
+     * Overall Budget card). Category allocations sum INTO this — the home
+     * screen "Weekly Budget" line and the dragon health math both read it.
+     */
+    val totalBudgetThisWeek: StateFlow<Double> = repo.getSettings()
+        .map { it?.overallWeeklyBudget ?: 0.0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    /** True when the user hasn't set an overall budget yet — drives first-launch dialog. */
+    val needsOverallBudget: StateFlow<Boolean> = totalBudgetThisWeek
+        .map { it <= 0.0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _topCategory = MutableStateFlow<BudgetCategoryWithSpent?>(null)
     val topCategory: StateFlow<BudgetCategoryWithSpent?> = _topCategory
@@ -32,7 +46,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
      * configured, returns 1f so the dragon doesn't fake-sleep.
      */
     val moneyLeftRatio: StateFlow<Float> = combine(
-        _totalSpentThisWeek, _totalBudgetThisWeek
+        _totalSpentThisWeek, totalBudgetThisWeek
     ) { spent, budget ->
         if (budget <= 0.0) 1f
         else ((budget - spent) / budget).toFloat()
@@ -55,6 +69,14 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun deletePurchase(purchase: Purchase) {
+        viewModelScope.launch { repo.deletePurchase(purchase) }
+    }
+
+    fun updatePurchase(purchase: Purchase) {
+        viewModelScope.launch { repo.updatePurchase(purchase) }
+    }
+
     fun renameDragon(newName: String) {
         val trimmed = newName.trim()
         if (trimmed.isEmpty()) return
@@ -67,8 +89,12 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private suspend fun refreshBudgetTotals() {
         val cats = repo.getCategoriesWithSpent()
         _totalSpentThisWeek.value = cats.sumOf { it.spentAmount }
-        _totalBudgetThisWeek.value = cats.sumOf { it.weeklyLimit }
         _topCategory.value = cats.filter { it.spentAmount > 0 }.maxByOrNull { it.spentAmount }
+    }
+
+    fun setOverallWeeklyBudget(amount: Double) {
+        if (amount <= 0.0) return
+        viewModelScope.launch { repo.setOverallWeeklyBudget(amount) }
     }
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {

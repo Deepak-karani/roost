@@ -27,8 +27,8 @@ class AppContainer(context: Context) {
     }
     
     // Vision Engine: ML Kit OCR → Smart Parser → Gemma refinement pipeline
-    val visionEngine: ReceiptVisionEngine by lazy { 
-        MLKitReceiptVisionEngine(context, liteRTLMManager) 
+    val visionEngine: ReceiptVisionEngine by lazy {
+        MLKitReceiptVisionEngine(context, liteRTLMManager, repository)
     }
 
     // Callback to re-trigger initialization from UI

@@ -33,7 +33,8 @@ import androidx.compose.foundation.layout.FlowRow
 @Composable
 fun HistoryScreen(
     appContainer: AppContainer,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onPurchaseClick: (Long) -> Unit = {}
 ) {
     val viewModel: HistoryViewModel = viewModel(
         factory = HistoryViewModel.Factory(appContainer)
@@ -41,6 +42,20 @@ fun HistoryScreen(
     val purchases by viewModel.purchases.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val totalSpent by viewModel.totalSpent.collectAsState()
+    val categories by viewModel.categories.collectAsState()
+    var editTarget by remember { mutableStateOf<Purchase?>(null) }
+
+    editTarget?.let { p ->
+        EditPurchaseDialog(
+            purchase = p,
+            onDismiss = { editTarget = null },
+            onSave = { updated ->
+                viewModel.updatePurchase(updated)
+                editTarget = null
+            },
+            categoryOptions = categories.map { it.name }
+        )
+    }
 
     Scaffold(
         containerColor = DragonBackground
@@ -106,11 +121,11 @@ fun HistoryScreen(
                         selected = selectedCategory == null,
                         onClick = { viewModel.filterByCategory(null) }
                     )
-                    Categories.ALL.forEach { cat ->
+                    categories.forEach { cat ->
                         SoftFilterChip(
-                            label = "${Categories.EMOJIS[cat] ?: ""} $cat",
-                            selected = selectedCategory == cat,
-                            onClick = { viewModel.filterByCategory(if (selectedCategory == cat) null else cat) }
+                            label = "${cat.iconEmoji} ${cat.name}",
+                            selected = selectedCategory == cat.name,
+                            onClick = { viewModel.filterByCategory(if (selectedCategory == cat.name) null else cat.name) }
                         )
                     }
                 }
@@ -129,8 +144,13 @@ fun HistoryScreen(
                 }
             }
 
-            items(purchases) { purchase ->
-                ActivityCard(purchase)
+            items(purchases, key = { it.id }) { purchase ->
+                SwipeablePurchaseRow(
+                    purchase = purchase,
+                    onTap = { onPurchaseClick(purchase.id) },
+                    onDelete = { viewModel.deletePurchase(purchase) },
+                    onEdit = { editTarget = purchase }
+                )
             }
         }
     }

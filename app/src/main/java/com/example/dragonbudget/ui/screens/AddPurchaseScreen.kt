@@ -66,10 +66,14 @@ fun AddPurchaseScreen(
     val scanError by viewModel.scanError.collectAsState()
     val dragonHealth by viewModel.dragonHealth.collectAsState()
     val moneyLeftRatio by viewModel.moneyLeftRatio.collectAsState()
+    val categories by viewModel.categories.collectAsState()
+    val categoryNames = categories.map { it.name }
 
     var merchant by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(Categories.FOOD) }
+    var selectedCategory by remember(categoryNames) {
+        mutableStateOf(categoryNames.firstOrNull() ?: Categories.FOOD)
+    }
     var note by remember { mutableStateOf("") }
     var categoryExpanded by remember { mutableStateOf(false) }
 
@@ -217,81 +221,144 @@ fun AddPurchaseScreen(
                     }
                 }
 
-                // ── Scanned Receipt Results ──
+                // ── Scanned Receipt with per-item checkboxes ──
+                // Big total at the top recomputes live from kept items so
+                // the user knows exactly what they're saving. Tap any row
+                // (or its checkbox) to include/exclude.
                 val scan = receiptScan
-                if (!isScanning && scan != null && scan.items.isNotEmpty()) {
+                if (!isScanning && scan != null && (scan.items.isNotEmpty() || scan.total > 0)) {
+                    val keptItems = scan.items.filter { it.selected }
+                    val keptSum = keptItems.sumOf { it.price }
+                    val extras = scan.tip + scan.serviceCharge
+                    val displayTotal = when {
+                        scan.items.isNotEmpty() -> keptSum + extras
+                        else -> scan.total
+                    }
+                    val mainCategory = (keptItems.takeIf { it.isNotEmpty() } ?: scan.items)
+                        .groupBy { it.suggestedCategory }
+                        .maxByOrNull { it.value.size }?.key ?: "Other"
+
                     item {
                         SoftCard(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(20.dp)) {
-                                Row(
+                                Text(
+                                    scan.merchant.ifBlank { "Receipt" },
+                                    style = DragonTypography.headlineMedium,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "${Categories.emojiFor(mainCategory)} $mainCategory",
+                                    style = DragonTypography.bodyLarge,
+                                    color = TextSecondary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Text(
+                                    "$${String.format("%.2f", displayTotal)}",
+                                    style = DragonTypography.headlineLarge,
+                                    fontSize = 44.sp,
                                     modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            scan.merchant.ifBlank { "Receipt" },
-                                            style = DragonTypography.headlineMedium,
-                                            fontSize = 22.sp
-                                        )
-                                        Text(
-                                            "${scan.items.size} items detected",
-                                            style = DragonTypography.bodyLarge,
-                                            color = TextMuted,
-                                            fontSize = 14.sp
-                                        )
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    if (scan.items.isEmpty()) "Total only — no line items detected"
+                                    else "${keptItems.size} of ${scan.items.size} item${if (scan.items.size == 1) "" else "s"} kept",
+                                    style = DragonTypography.bodyLarge,
+                                    color = TextMuted,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center
+                                )
+                                if (scan.tip > 0 || scan.serviceCharge > 0) {
+                                    Spacer(Modifier.height(10.dp))
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Items", style = DragonTypography.bodyMedium, color = TextMuted)
+                                            Text("$${String.format("%.2f", keptSum)}", style = DragonTypography.bodyMedium, color = TextMuted)
+                                        }
+                                        if (scan.tip > 0) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text("Tip", style = DragonTypography.bodyMedium, color = TextMuted)
+                                                Text("$${String.format("%.2f", scan.tip)}", style = DragonTypography.bodyMedium, color = TextMuted)
+                                            }
+                                        }
+                                        if (scan.serviceCharge > 0) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text("Service", style = DragonTypography.bodyMedium, color = TextMuted)
+                                                Text("$${String.format("%.2f", scan.serviceCharge)}", style = DragonTypography.bodyMedium, color = TextMuted)
+                                            }
+                                        }
                                     }
-                                    Text(
-                                        "$${String.format("%.2f", scan.total)}",
-                                        style = DragonTypography.headlineMedium,
-                                        fontSize = 22.sp
-                                    )
                                 }
                             }
                         }
                     }
 
-                    itemsIndexed(scan.items) { index, item ->
-                        SoftCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            cornerRadius = 14.dp,
-                            onClick = { viewModel.toggleItemSelection(index) }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                    // Per-item checkboxes (only when items were detected)
+                    if (scan.items.isNotEmpty()) {
+                        item {
+                            Text(
+                                "Tap to exclude items you don't want to track",
+                                style = DragonTypography.bodyMedium,
+                                color = TextMuted,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                        itemsIndexed(scan.items) { index, lineItem ->
+                            SoftCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                cornerRadius = 14.dp,
+                                onClick = { viewModel.toggleItemSelection(index) }
                             ) {
-                                Checkbox(
-                                    checked = item.selected,
-                                    onCheckedChange = { viewModel.toggleItemSelection(index) },
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = TextPrimary,
-                                        uncheckedColor = TextMuted
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = lineItem.selected,
+                                        onCheckedChange = { viewModel.toggleItemSelection(index) },
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = TextPrimary,
+                                            uncheckedColor = TextMuted
+                                        )
                                     )
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            lineItem.itemName,
+                                            style = DragonTypography.bodyLarge,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (lineItem.selected) TextPrimary else TextMuted
+                                        )
+                                        Text(
+                                            "${Categories.emojiFor(lineItem.suggestedCategory)} ${lineItem.suggestedCategory}",
+                                            style = DragonTypography.bodyMedium,
+                                            fontSize = 12.sp,
+                                            color = TextMuted
+                                        )
+                                    }
                                     Text(
-                                        item.itemName,
+                                        "$${String.format("%.2f", lineItem.price)}",
                                         style = DragonTypography.bodyLarge,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (item.selected) TextPrimary else TextMuted
-                                    )
-                                    Text(
-                                        "${Categories.EMOJIS[item.suggestedCategory] ?: "📦"} ${item.suggestedCategory}",
-                                        style = DragonTypography.bodyLarge,
-                                        fontSize = 13.sp,
-                                        color = TextMuted
+                                        color = if (lineItem.selected) TextPrimary else TextMuted
                                     )
                                 }
-                                Text(
-                                    "$${String.format("%.2f", item.price)}",
-                                    style = DragonTypography.bodyLarge,
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (item.selected) TextPrimary else TextMuted
-                                )
                             }
                         }
                     }
@@ -305,22 +372,29 @@ fun AddPurchaseScreen(
                                 modifier = Modifier.weight(1f),
                                 backgroundColor = AccentBeige,
                                 onClick = {
-                                    val selectedCount = scan.items.count { it.selected }
-                                    if (selectedCount > 0) {
-                                        viewModel.saveAllScannedItems(scan.merchant, scan.items)
-                                    }
+                                    viewModel.saveAllScannedItems(scan.merchant, scan.items)
                                 }
                             ) {
-                                val selectedCount = scan.items.count { it.selected }
-                                Text(
-                                    "Save $selectedCount item${if (selectedCount == 1) "" else "s"}",
+                                Row(
                                     modifier = Modifier
                                         .padding(vertical = 14.dp)
                                         .fillMaxWidth(),
-                                    style = DragonTypography.headlineMedium,
-                                    fontSize = 18.sp,
-                                    textAlign = TextAlign.Center
-                                )
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        "Save $${String.format("%.2f", displayTotal)}",
+                                        style = DragonTypography.headlineMedium,
+                                        fontSize = 17.sp
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        null,
+                                        modifier = Modifier.size(22.dp),
+                                        tint = TextPrimary
+                                    )
+                                }
                             }
                             SoftCard(
                                 modifier = Modifier.weight(1f),
@@ -356,7 +430,8 @@ fun AddPurchaseScreen(
                             selected = selectedCategory,
                             expanded = categoryExpanded,
                             onExpand = { categoryExpanded = it },
-                            onSelect = { selectedCategory = it }
+                            onSelect = { selectedCategory = it },
+                            options = categoryNames
                         )
                     }
                     item {
@@ -402,8 +477,11 @@ fun AddPurchaseScreen(
             // ── Small Dragon in Corner (mirrors health + money-left) ──
             Image(
                 painter = painterResource(
-                    id = com.example.dragonbudget.engine.DragonStateEngine
-                        .getDragonDrawable(dragonHealth, moneyLeftRatio)
+                    id = com.example.dragonbudget.engine.DragonStateEngine.dragonFrameToDrawable(
+                        com.example.dragonbudget.engine.DragonStateEngine.getDragonFrameForHealth(
+                            (moneyLeftRatio.coerceIn(0f, 1f) * 100).toInt()
+                        )
+                    )
                 ),
                 contentDescription = null,
                 modifier = Modifier
@@ -473,7 +551,8 @@ fun SoftCategoryPicker(
     selected: String,
     expanded: Boolean,
     onExpand: (Boolean) -> Unit,
-    onSelect: (String) -> Unit
+    onSelect: (String) -> Unit,
+    options: List<String> = listOf(Categories.FOOD)
 ) {
     Box {
         SoftCard(
@@ -486,7 +565,7 @@ fun SoftCategoryPicker(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "${Categories.EMOJIS[selected] ?: ""} $selected",
+                    text = "${Categories.emojiFor(selected)} $selected",
                     style = DragonTypography.bodyLarge,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
@@ -499,9 +578,9 @@ fun SoftCategoryPicker(
             onDismissRequest = { onExpand(false) },
             modifier = Modifier.background(DragonSurface)
         ) {
-            Categories.ALL.forEach { category ->
+            options.forEach { category ->
                 DropdownMenuItem(
-                    text = { Text("${Categories.EMOJIS[category]} $category", fontWeight = FontWeight.Bold) },
+                    text = { Text("${Categories.emojiFor(category)} $category", fontWeight = FontWeight.Bold) },
                     onClick = {
                         onSelect(category)
                         onExpand(false)
